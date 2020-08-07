@@ -4,7 +4,10 @@ import (
 	"fmt"
 	"log"
 
+	"citihub.com/probr/test/features"
+
 	"citihub.com/probr/internal/clouddriver/kubernetes"
+	"citihub.com/probr/internal/coreengine"
 	"github.com/cucumber/godog"
 )
 
@@ -13,14 +16,33 @@ type probState struct {
 	httpStatusCode int
 }
 
-func (p *probState) aKubernetesClusterIsDeployed() error {
-	c, err := kubernetes.GetClient()
-	if err != nil {
-		return err
-	}
+func init() {
+	td := coreengine.TestDescriptor{Group: coreengine.Kubernetes,
+		Category: coreengine.InternetAccess, Name: "internet_access"}
 
-	if c == nil {
-		return fmt.Errorf("client is nil")
+	coreengine.TestHandleFunc(td, &coreengine.GoDogTestTuple{
+		Handler: features.GodogTestHandler,
+		Data: &coreengine.GodogTest{
+			TestDescriptor:       &td,
+			TestSuiteInitializer: TestSuiteInitialize,
+			ScenarioInitializer:  ScenarioInitialize,
+		},
+	})
+}
+
+//TODO: revise when interface this bit up ...
+var na kubernetes.NetworkAccess
+
+// SetNetworkAccess ...
+func SetNetworkAccess(n kubernetes.NetworkAccess) {
+	na = n
+}
+
+func (p *probState) aKubernetesClusterIsDeployed() error {
+	b := na.ClusterIsDeployed()
+
+	if b == nil || !*b {
+		return fmt.Errorf("kubernetes cluster is NOT deployed")
 	}
 
 	//else we're good ...
@@ -28,7 +50,15 @@ func (p *probState) aKubernetesClusterIsDeployed() error {
 }
 
 func (p *probState) aPodIsDeployedInTheCluster() error {
-	pod, err := kubernetes.SetupNetworkAccessTestPod()
+	//only one pod is needed for all scenarios
+	//if we have a pod name, then it's already created so
+	//this step can be skipped and the pod will be reused
+	if p.podName != "" {
+		log.Printf("[INFO] Pod %v has already been created - reusing the pod", p.podName)
+		return nil
+	}
+
+	pod, err := na.SetupNetworkAccessTestPod()
 
 	if err != nil {
 		return err
@@ -46,10 +76,10 @@ func (p *probState) aPodIsDeployedInTheCluster() error {
 }
 
 func (p *probState) aProcessInsideThePodEstablishesADirectHTTPSConnectionTo(url string) error {
-	code, err := kubernetes.AccessURL(&url)
+	code, err := na.AccessURL(&p.podName, &url)
 
 	if err != nil {
-		log.Printf("Error raised when attempting to access URL: %v", err)
+		log.Printf("[ERROR] Error raised when attempting to access URL: %v", err)
 		return err
 	}
 
@@ -76,28 +106,33 @@ func (p *probState) setup() {
 }
 
 func (p *probState) tearDown() {
-	kubernetes.TeardownNetworkAccessTestPod()
+	na.TeardownNetworkAccessTestPod(&p.podName)
 }
 
-// func FeatureContext(s *godog.Suite) {
-// 	s.Step(`^a Kubernetes cluster is deployed$`, aKubernetesClusterIsDeployed)
-// 	s.Step(`^a pod is deployed in the cluster$`, aPodIsDeployedInTheCluster)
-// 	s.Step(`^a process inside the pod establishes a direct http\(s\) connection to "([^"]*)"$`, aProcessInsideThePodEstablishesADirectHttpsConnectionTo)
-// 	s.Step(`^access is "([^"]*)"$`, accessIs)
-// }
+func (p *probState) scenarioTearDown() {
+	//reset the httpcode
+	p.httpStatusCode = 0
+}
+
+var ps = probState{}
 
 //TestSuiteInitialize ...
 func TestSuiteInitialize(ctx *godog.TestSuiteContext) {
 	ctx.BeforeSuite(func() {}) //nothing for now
 
-	ps := probState{}
-	ctx.AfterSuite(ps.tearDown)
+	ctx.AfterSuite(func() {
+		ps.tearDown()
+	})
+
+	//check dependancies ...
+	if na == nil {
+		// not been given one so set default
+		na = kubernetes.NewDefaultNA()
+	}
 }
 
 //ScenarioInitialize ...
 func ScenarioInitialize(ctx *godog.ScenarioContext) {
-	ps := probState{}
-
 	ctx.BeforeScenario(func(*godog.Scenario) {
 		ps.setup()
 	})
@@ -107,4 +142,7 @@ func ScenarioInitialize(ctx *godog.ScenarioContext) {
 	ctx.Step(`^a process inside the pod establishes a direct http\(s\) connection to "([^"]*)"$`, ps.aProcessInsideThePodEstablishesADirectHTTPSConnectionTo)
 	ctx.Step(`^access is "([^"]*)"$`, ps.accessIs)
 
+	ctx.AfterScenario(func(sc *godog.Scenario, err error) {
+		ps.scenarioTearDown()
+	})
 }
