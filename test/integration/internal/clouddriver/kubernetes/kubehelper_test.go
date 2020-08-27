@@ -1,12 +1,13 @@
 package kubernetes_test
 
 import (
+	"io/ioutil"
 	"log"
 	"os"
 	"testing"
 
-	"citihub.com/probr/internal/clouddriver/kubernetes"
-	_ "citihub.com/probr/internal/config"
+	"gitlab.com/citihub/probr/internal/clouddriver/kubernetes"
+	_ "gitlab.com/citihub/probr/internal/config"
 )
 
 var (
@@ -34,6 +35,16 @@ func TestCreatePod(t *testing.T) {
 	handleResult(nil, err)
 }
 
+func TestCreatePodFromYaml(t *testing.T) {
+	//read the yaml:
+	b, _ := ioutil.ReadFile("pod-test.yaml")
+	//y := string(b)
+
+	_, err := kubernetes.GetKubeInstance().CreatePodFromYaml(b, &testPod, &testNS, &testImage, true)
+
+	handleResult(nil, err)
+}
+
 func TestExecCmd(t *testing.T) {
 
 	url := "http://www.google.com"
@@ -57,6 +68,19 @@ func TestDeleteNamespace(t *testing.T) {
 	err := kubernetes.GetKubeInstance().DeleteNamespace(&testNS)
 
 	handleResult(nil, err)
+}
+
+func TestConfigMap(t *testing.T) {
+	c := "test-cm"
+	cm, err := kubernetes.GetKubeInstance().CreateConfigMap(&c, &testNS)
+
+	handleResult(nil, err)
+
+	//now delete it:
+	if cm != nil {
+		err = kubernetes.GetKubeInstance().DeleteConfigMap(&c, &testNS)
+		handleResult(nil, err)
+	}
 }
 
 func handleResult(yesNo *bool, err error) {

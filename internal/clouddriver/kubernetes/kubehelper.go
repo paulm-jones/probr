@@ -13,12 +13,13 @@ import (
 	"sync"
 	"time"
 
-	"citihub.com/probr/internal/config"
+	"gitlab.com/citihub/probr/internal/config"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/remotecommand"
 
@@ -43,6 +44,9 @@ const (
 	PSPHostNamespace
 	PSPHostNetwork
 	PSPAllowedCapabilities
+	PSPAllowedPortRange
+	PSPAllowedVolumeTypes
+	PSPSeccompProfile
 	ImagePullError
 )
 
@@ -55,6 +59,9 @@ func (r PodCreationErrorReason) String() string {
 		"podcreation-error: psp-host-namespace",
 		"podcreation-error: psp-host-network",
 		"podcreation-error: psp-allowed-capabilities",
+		"podcreation-error: psp-allowed-portrange",
+		"podcreation-error: psp-allowed-volume-types-profile",
+		"podcreation-error: psp-allowed-seccomp-profile",
 		"podcreation-error: image-pull-error"}[r]
 }
 
@@ -76,10 +83,13 @@ type Kubernetes interface {
 	GetPods() (*apiv1.PodList, error)
 	CreatePod(pname *string, ns *string, cname *string, image *string, w bool, sc *apiv1.SecurityContext) (*apiv1.Pod, error)
 	CreatePodFromObject(p *apiv1.Pod, pname *string, ns *string, w bool) (*apiv1.Pod, error)
+	CreatePodFromYaml(y []byte, pname *string, ns *string, image *string, w bool) (*apiv1.Pod, error)
 	GetPodObject(pname string, ns string, cname string, image string, sc *apiv1.SecurityContext) *apiv1.Pod
 	ExecCommand(cmd, ns, pn *string) (string, string, int, error)
 	DeletePod(pname *string, ns *string, w bool) error
 	DeleteNamespace(ns *string) error
+	CreateConfigMap(n *string, ns *string) (*apiv1.ConfigMap, error)
+	DeleteConfigMap(n *string, ns *string) error
 }
 
 var instance *Kube
@@ -107,6 +117,9 @@ func GetKubeInstance() *Kube {
 		instance.azErrorToPodCreationError["azurepolicy-psp-host-namespace"] = PSPHostNamespace
 		instance.azErrorToPodCreationError["azurepolicy-psp-host-network"] = PSPHostNetwork
 		instance.azErrorToPodCreationError["azurepolicy-container-allowed-capabilities"] = PSPAllowedCapabilities
+		instance.azErrorToPodCreationError["azurepolicy-psp-host-network-ports"] = PSPAllowedPortRange
+		instance.azErrorToPodCreationError["azurepolicy-psp-volume-types"] = PSPAllowedVolumeTypes
+		instance.azErrorToPodCreationError["azurepolicy-psp-seccomp"] = PSPSeccompProfile
 	})
 
 	return instance
@@ -234,6 +247,25 @@ func (k *Kube) CreatePod(pname *string, ns *string, cname *string, image *string
 	return k.CreatePodFromObject(p, pname, ns, w)
 }
 
+// CreatePodFromYaml ...
+func (k *Kube) CreatePodFromYaml(y []byte, pname *string, ns *string, image *string, w bool) (*apiv1.Pod, error) {
+
+	decode := scheme.Codecs.UniversalDeserializer().Decode
+	
+	o, _, _ := decode(y, nil, nil)
+
+	p := o.(*apiv1.Pod)
+	//update the name to the one that's supplied
+	p.SetName(*pname)
+	//also update the image (which could have been supplied via the env)
+	//(only expecting one container, but loop in case of many)
+	for _, c := range p.Spec.Containers {		
+		c.Image = *image
+	}
+
+	return k.CreatePodFromObject(p, pname, ns, w)
+}
+
 // CreatePodFromObject creates a pod from the supplied pod object in the gievn namespace
 func (k *Kube) CreatePodFromObject(p *apiv1.Pod, pname *string, ns *string, w bool) (*apiv1.Pod, error) {
 	c, err := k.GetClient()
@@ -320,6 +352,72 @@ func (k *Kube) GetPodObject(pname string, ns string, cname string, image string,
 			},
 		},
 	}
+}
+
+// CreateConfigMap ...
+func (k *Kube) CreateConfigMap(n *string, ns *string) (*apiv1.ConfigMap, error) {
+	c, err := k.GetClient()
+	if err != nil {
+		return nil, err
+	}
+
+	//create the namespace for the POD (noOp if already present)
+	_, err = k.createNamespace(ns)
+	if err != nil {
+		return nil, err
+	}
+
+	//now do config map ...
+	cms := c.CoreV1().ConfigMaps(*ns)
+
+	cm := apiv1.ConfigMap {
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      *n,
+			Namespace: *ns,
+			Labels: map[string]string{
+				"app": "demo",
+			},			
+		},
+		Data: map[string]string{
+			"key": "value",
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	res, err := cms.Create(ctx, &cm, metav1.CreateOptions{})
+
+	if err != nil {
+		log.Printf("[WARN] Error creating ConfigMap %q: %v", res.GetObjectMeta().GetName(), err)			
+		return nil, err
+	}
+
+	log.Printf("[NOTICE] ConfigMap %q created.", res.GetObjectMeta().GetName())
+
+	return res, nil
+}
+
+// DeleteConfigMap ...
+func (k *Kube) DeleteConfigMap(n *string, ns *string) error {
+	c, err := k.GetClient()
+	if err != nil {
+		return err
+	}
+
+	cms := c.CoreV1().ConfigMaps(*ns)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	err = cms.Delete(ctx, *n, metav1.DeleteOptions{})
+	if err != nil {
+		return err
+	}
+
+	log.Printf("[NOTICE] ConfigMap %v deleted.", *n)
+
+	return nil
 }
 
 //GenerateUniquePodName ...
@@ -534,7 +632,11 @@ func waitForPhase(ph apiv1.PodPhase, c *kubernetes.Clientset, ns *string, n *str
 
 	ps := c.CoreV1().Pods(*ns)
 
-	w, err := ps.Watch(context.Background(), metav1.ListOptions{})
+	//don't wait for more than 1 min ...
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
+
+	w, err := ps.Watch(ctx, metav1.ListOptions{})
 
 	if err != nil {
 		return err
@@ -547,10 +649,23 @@ func waitForPhase(ph apiv1.PodPhase, c *kubernetes.Clientset, ns *string, n *str
 		p, ok := e.Object.(*apiv1.Pod)
 		if !ok {
 			log.Printf("[WARNING] Unexpected Watch Event Type - skipping")
-			break
+			//check for timeout
+			if ctx.Err() != nil {
+				log.Printf("[WARNING] Context error received while waiting on pod %v. Error: %v", *n, ctx.Err())
+				return ctx.Err()
+			}
+			// break
+			continue
 		}
-		log.Printf("[INFO] Watch Container phase: %v", p.Status.Phase)
-		log.Printf("[DEBUG] Watch Container status: %+v", p.Status.ContainerStatuses)
+		if p.GetName() != *n {
+			log.Printf("[INFO] Event received for pod %v which we're not waiting on. Skipping.", p.GetName())
+			continue
+		}
+
+		log.Printf("[NOTICE] Pod %v Phase: %v", p.GetName(), p.Status.Phase)
+		for _, con := range p.Status.ContainerStatuses {
+			log.Printf("[INFO] Container Status: %+v", con)
+		}
 
 		// don't wait if we're getting errors:
 		b, err := podInErrorState(p)

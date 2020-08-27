@@ -3,11 +3,11 @@ package kubernetesunit
 import (
 	"testing"
 
-	"citihub.com/probr/internal/clouddriver/kubernetes"
-	"citihub.com/probr/internal/config"
-	"citihub.com/probr/internal/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"gitlab.com/citihub/probr/internal/clouddriver/kubernetes"
+	"gitlab.com/citihub/probr/internal/config"
+	"gitlab.com/citihub/probr/internal/utils"
 	apiv1 "k8s.io/api/core/v1"
 )
 
@@ -182,3 +182,16 @@ func (m *securityProviderMock) HasAssignedCapabilitiesRestriction() (*bool, erro
 	b := m.Called().Bool(0)
 	return &b, nil
 }
+func (m *securityProviderMock) HasHostPortRestriction() (*bool, error) {
+	b := m.Called().Bool(0)
+	return &b, nil
+}
+func (m *securityProviderMock) HasVolumeTypeRestriction() (*bool, error) {
+	b := m.Called().Bool(0)
+	return &b, nil
+}
+func (m *securityProviderMock) HasSeccompProfileRestriction() (*bool, error) {
+	b := m.Called().Bool(0)
+	return &b, nil
+}
+

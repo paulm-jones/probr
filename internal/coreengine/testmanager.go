@@ -1,6 +1,7 @@
 package coreengine
 
 import (
+	"bytes"
 	"errors"
 	"log"
 	"sync"
@@ -69,7 +70,7 @@ type Test struct {
 
 	Status *TestStatus `json:"status,omitempty"`
 
-	//TODO: Add Results
+	Results *bytes.Buffer
 }
 
 //TestDescriptor - struct to hold description of test, name, category, strictness?? etc.
@@ -138,7 +139,6 @@ func (ts *TestStore) GetTest(uuid *uuid.UUID) (*[]*Test, error) {
 	if !exists {
 		return nil, errors.New("test with uuid " + (*uuid).String() + " not found")
 	}
-
 	return t, nil
 }
 

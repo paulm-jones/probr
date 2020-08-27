@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"citihub.com/probr/internal/config"
+	"gitlab.com/citihub/probr/internal/config"
 
 	"github.com/Azure/azure-sdk-for-go/profiles/latest/resources/mgmt/policy"
 	"github.com/Azure/go-autorest/autorest/azure/auth"
@@ -31,6 +31,9 @@ const (
 	azPSPContainerPrivileged          = "AZPSPContainerPrivileged"
 	azPSPApprovedUsersAndGroups       = "AZPSPApprovedUsersAndGroups"
 	azPSPAllowedCapabilitiesOnly      = "AZPSPAllowedCapabilitiesOnly"
+	azPSPApprovedPortRangeOnly        = "AZPSPApprovedPortRangeOnly"
+	azPSPApprovedVolumeTypeOnly       = "AZPSPApprovedVolumeTypeOnly"
+	azPSPApprovedSeccompProfile       = "AZPSPApprovedSeccompProfile"
 )
 
 var azPolicyUUIDToProbrPolicy = make(map[string]string)
@@ -44,6 +47,9 @@ func init() {
 	azPolicyUUIDToProbrPolicy["/providers/Microsoft.Authorization/policyDefinitions/95edb821-ddaf-4404-9732-666045e056b4"] = azPSPContainerPrivileged
 	azPolicyUUIDToProbrPolicy["/providers/Microsoft.Authorization/policyDefinitions/f06ddb64-5fa3-4b77-b166-acb36f7f6042"] = azPSPApprovedUsersAndGroups
 	azPolicyUUIDToProbrPolicy["/providers/Microsoft.Authorization/policyDefinitions/c26596ff-4d70-4e6a-9a30-c2506bd2f80c"] = azPSPAllowedCapabilitiesOnly
+	azPolicyUUIDToProbrPolicy["/providers/Microsoft.Authorization/policyDefinitions/82985f06-dc18-4a48-bc1c-b9f4f0098cfe"] = azPSPApprovedPortRangeOnly
+	azPolicyUUIDToProbrPolicy["/providers/Microsoft.Authorization/policyDefinitions/16697877-1118-4fb1-9b65-9898ec2509ec"] = azPSPApprovedVolumeTypeOnly
+	azPolicyUUIDToProbrPolicy["/providers/Microsoft.Authorization/policyDefinitions/975ce327-682c-4f2e-aa46-b9598289b86c"] = azPSPApprovedSeccompProfile
 }
 
 //NewAzPolicyProvider ...
@@ -113,6 +119,21 @@ func (p *AZSecurityPolicyProvider) HasAllowedCapabilitiesRestriction() (*bool, e
 // HasAssignedCapabilitiesRestriction ...
 func (p *AZSecurityPolicyProvider) HasAssignedCapabilitiesRestriction() (*bool, error) {
 	return p.checkForRestrictions(&[]string{azPSPLinuxRestricted})
+}
+
+// HasHostPortRestriction ...
+func (p *AZSecurityPolicyProvider) HasHostPortRestriction() (*bool, error) {
+	return p.checkForRestrictions(&[]string{azPSPLinuxRestricted, azPSPApprovedPortRangeOnly})
+}
+
+// HasVolumeTypeRestriction ...
+func (p *AZSecurityPolicyProvider) HasVolumeTypeRestriction() (*bool, error) {
+	return p.checkForRestrictions(&[]string{azPSPLinuxRestricted, azPSPApprovedPortRangeOnly})
+}
+
+// HasSeccompProfileRestriction ...
+func (p *AZSecurityPolicyProvider) HasSeccompProfileRestriction() (*bool, error) {
+	return p.checkForRestrictions(&[]string{azPSPLinuxRestricted, azPSPApprovedPortRangeOnly})
 }
 
 func (p *AZSecurityPolicyProvider) checkForRestrictions(res *[]string) (*bool, error) {
