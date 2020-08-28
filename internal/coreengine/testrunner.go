@@ -1,6 +1,7 @@
 package coreengine
 
 import (
+	"bytes"
 	"fmt"
 	"sync"
 
@@ -13,7 +14,7 @@ type TestRunner interface {
 }
 
 //TestHandlerFunc ...
-type TestHandlerFunc func(t *GodogTest) (int, error)
+type TestHandlerFunc func(t *GodogTest) (int, *bytes.Buffer, error)
 
 //GodogTest ...
 type GodogTest struct {
@@ -65,7 +66,7 @@ func (ts *TestStore) RunTest(t *Test) (int, error) {
 		return 4, fmt.Errorf("no test handler available for %v - cannot run test", *t.TestDescriptor)
 	}
 
-	s, err := g.Handler(g.Data)
+	s, o, err := g.Handler(g.Data)
 
 	if s == 0 {
 		// success
@@ -77,6 +78,7 @@ func (ts *TestStore) RunTest(t *Test) (int, error) {
 		//TODO: this could be adjusted based on test strictness ...
 	}
 
+	t.Results = o // If in-mem output provided, store as Results
 	return s, err
 }
 

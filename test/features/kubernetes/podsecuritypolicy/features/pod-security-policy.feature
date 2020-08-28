@@ -21,6 +21,7 @@ So that a policy of least privilege can be enforced in order to prevent maliciou
 		And privileged access request is marked "<privileged access requested>" for the Kubernetes deployment
 		Then the operation will "<RESULT>" with an error "<ERRORMESSAGE>"
 		But I should not be able to perform a command that requires privileged access 
+		And I should be able to perform an allowed command
 
 		Examples: 
 			| privileged access requested | RESULT        | ERRORMESSAGE							     |
@@ -36,6 +37,7 @@ So that a policy of least privilege can be enforced in order to prevent maliciou
 		And hostPID request is marked "<HostPID requested>" for the Kubernetes deployment
 		Then the operation will "<RESULT>" with an error "<ERRORMESSAGE>"
 		But I should not be able to perform a command that provides access to the host PID namespace 
+		And I should be able to perform an allowed command
 
 		Examples: 
 			| HostPID requested           | RESULT        | ERRORMESSAGE							     |
@@ -51,6 +53,7 @@ So that a policy of least privilege can be enforced in order to prevent maliciou
 		And hostIPC request is marked "<hostIPC access is requested>" for the Kubernetes deployment
 		Then the operation will "<RESULT>" with an error "<ERRORMESSAGE>"
 		But I should not be able to perform a command that provides access to the host IPC namespace
+		And I should be able to perform an allowed command
 
 		Examples:
 			| hostIPC access is requested | RESULT   | ERRORMESSAGE                        |
@@ -66,6 +69,7 @@ So that a policy of least privilege can be enforced in order to prevent maliciou
 		And hostNetwork request is marked "<hostNetwork access is requested>" for the Kubernetes deployment
 		Then the operation will "<RESULT>" with an error "<ERRORMESSAGE>"
 		But I should not be able to perform a command that provides access to the host network namespace
+		And I should be able to perform an allowed command
 
 		Examples:
 			| hostNetwork access is requested | RESULT   | ERRORMESSAGE |
@@ -81,6 +85,7 @@ So that a policy of least privilege can be enforced in order to prevent maliciou
 		And privileged escalation is marked "<AllowPrivilegeEscalation requested>" for the Kubernetes deployment 
 		Then the operation will "<RESULT>" with an error "<ERRORMESSAGE>"
 		But I should not be able to perform a command that requires privileged access
+		And I should be able to perform an allowed command
 
 		Examples: 
 			| AllowPrivilegeEscalation requested | RESULT        | ERRORMESSAGE							                       |
@@ -96,6 +101,7 @@ So that a policy of least privilege can be enforced in order to prevent maliciou
 		And the user requested is "<requested user>" for the Kubernetes deployment 
 		Then the operation will "<RESULT>" with an error "<ERRORMESSAGE>"
 		And the Kubernetes deployment should run with a non-root UID
+		And I should be able to perform an allowed command
 
 		Examples: 
 			| requested user | RESULT        | ERRORMESSAGE				   |
@@ -111,6 +117,7 @@ So that a policy of least privilege can be enforced in order to prevent maliciou
 		And  NET_RAW is marked "<NET_RAW requested>" for the Kubernetes deployment
 		Then the operation will "<RESULT>" with an error "<ERRORMESSAGE>"
 		But I should not be able to perform a command that requires NET_RAW capability
+		And I should be able to perform an allowed command
 
 		Examples: 
 			| NET_RAW requested           | RESULT        | ERRORMESSAGE							      |
@@ -126,6 +133,7 @@ So that a policy of least privilege can be enforced in order to prevent maliciou
 		And additional capabilities "<requested>" requested for the Kubernetes deployment
 		Then the operation will "<RESULT>" with an error "<ERRORMESSAGE>"
 		But I should not be able to perform a command that requires capabilities outside of the default set
+		And I should be able to perform an allowed command
 
 		Examples: 
 			| requested 	| RESULT        | ERRORMESSAGE						           |
@@ -141,9 +149,58 @@ So that a policy of least privilege can be enforced in order to prevent maliciou
 		And assigned capabilities "<requested>" requested for the Kubernetes deployment
         Then the operation will "<RESULT>" with an error "<ERRORMESSAGE>"
 		But I should not be able to perform a command that requires any capabilities
+		And I should be able to perform an allowed command
 
     	Examples: 
         	| requested 	| RESULT   | ERRORMESSAGE                                            |
         	| ARE           | Fail     | Containers with assigned capabilities can’t be deployed |
         	| ARE NOT       | Succeed  |                                                         |
 			| Not defined   | Succeed  |                                                         |
+
+	@preventitive @AZP-0.1
+	Scenario Outline: Prevent deployments from accessing unapproved port range
+		Given a Kubernetes cluster exists which we can deploy into
+		And some system exists to prevent Kubernetes deployments with unapproved port range from being deployed to an existing Kubernetes cluster
+        When a Kubernetes deployment is applied to an existing Kubernetes cluster
+		And an "<requested>" port range is requested for the Kubernetes deployment
+		Then the operation will "<RESULT>" with an error "<ERRORMESSAGE>"
+		But I should not be able to perform a command that access an unapproved port range
+		And I should be able to perform an allowed command
+
+		Examples:
+			| requested 	| RESULT 	| ERRORMESSAGE							|
+			| unapproved  	| Fail  	| Cannot access unapproved port range	|	
+			| approved		| Succeed	|									  	|
+			| not defined	| Succeed	|										|
+	
+	@preventitive @AZP-0.2
+	Scenario Outline: Prevent deployments from accessing unapproved volume types
+		Given a Kubernetes cluster exists which we can deploy into
+		And some system exists to prevent Kubernetes deployments with unapproved volume types from being deployed to an existing Kubernetes cluster
+        When a Kubernetes deployment is applied to an existing Kubernetes cluster
+		And an "<requested>" volume type is requested for the Kubernetes deployment
+		Then the operation will "<RESULT>" with an error "<ERRORMESSAGE>"
+		But I should not be able to perform a command that accesses an unapproved volume type
+		And I should be able to perform an allowed command
+
+		Examples:
+			| requested 	| RESULT 	| ERRORMESSAGE							|
+			| unapproved  	| Fail  	| Cannot access unapproved volume type	|	
+			| approved		| Succeed	|									  	|
+			| not defined	| Succeed	|										|
+	
+	@preventitive @AZP-0.3
+	Scenario Outline: Prevent deployments from running without approved seccomp profile
+		Given a Kubernetes cluster exists which we can deploy into
+		And some system exists to prevent Kubernetes deployments without approved seccomp profiles from being deployed to an existing Kubernetes cluster
+        When a Kubernetes deployment is applied to an existing Kubernetes cluster
+		And an "<requested>" seccomp profile is requested for the Kubernetes deployment
+		Then the operation will "<RESULT>" with an error "<ERRORMESSAGE>"
+		But I should not be able to perform a system call that is blocked by the seccomp profile
+		And I should be able to perform an allowed command
+
+		Examples:
+			| requested 	| RESULT 	| ERRORMESSAGE							    |
+			| unapproved  	| Fail  	| Cannot request unapproved seccomp profile	|	
+			| approved		| Succeed	| no error							  		|	
+			| undefined		| Fail		| Approved seccomp profile required			|

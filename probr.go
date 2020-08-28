@@ -1,68 +1,21 @@
-package main
+package probr
 
 import (
-	"flag"
-	"log"
-	"os"
+	"github.com/citihub/probr/internal/clouddriver/kubernetes"
+	"github.com/citihub/probr/internal/coreengine"
 
-	"citihub.com/probr/internal/clouddriver/kubernetes"
-	"citihub.com/probr/internal/config"
-	"citihub.com/probr/internal/coreengine"
 	"github.com/google/uuid"
 
-	_ "citihub.com/probr/internal/config" //needed for logging
-	"citihub.com/probr/test/features"
-	_ "citihub.com/probr/test/features/clouddriver"
-	_ "citihub.com/probr/test/features/kubernetes/containerregistryaccess" //needed to run init on TestHandlers
-	_ "citihub.com/probr/test/features/kubernetes/internetaccess"          //needed to run init on TestHandlers
-	_ "citihub.com/probr/test/features/kubernetes/podsecuritypolicy"       //needed to run init on TestHandlers
-)
-
-var (
-	integrationTest = flag.Bool("integrationTest", false, "run integration tests")
+	_ "github.com/citihub/probr/internal/config" //needed for logging
+	"github.com/citihub/probr/test/features"
+	_ "github.com/citihub/probr/test/features/clouddriver"
+	_ "github.com/citihub/probr/test/features/kubernetes/containerregistryaccess" //needed to run init on TestHandlers
+	_ "github.com/citihub/probr/test/features/kubernetes/internetaccess"          //needed to run init on TestHandlers
+	_ "github.com/citihub/probr/test/features/kubernetes/podsecuritypolicy"       //needed to run init on TestHandlers
 )
 
 //TODO: revise when interface this bit up ...
 var kube = kubernetes.GetKubeInstance()
-
-func main() {
-	//TODO: this (to line 45) will all move when we merge the change to move to a library
-	//just dumping in here for now ...
-	k := flag.String("kube", "", "kube config file")
-	o := flag.String("outputDir", "", "output directory")
-	flag.Parse()
-
-	SetIOPaths(*k, *o)
-
-	log.Printf("[NOTICE] Probr running with environment: ")
-	log.Printf("[NOTICE] %v", config.GetEnvConfigInstance())
-
-	if k != nil && len(*k) > 0 {
-		log.Printf("[NOTICE] Kube Config has been overridden on command line to: " + *k)
-	}
-	if o != nil && len(*o) > 0 {
-		log.Printf("[NOTICE] Output Directory has been overridden on command line to: " + *o)
-	}
-
-	//TODO: this is the cli and what will be called on Docker run ...
-	//use args to figure out what needs to be run / output paths / etc
-	//and call TestManager to make it happen :-)
-
-	//(possibly want to create a separate "cli" file)
-
-	// get all the below from args ... just hard code for now
-
-	//exec 'em all (for now!)
-	s, err := RunAllTests()
-	if err != nil {
-		log.Fatalf("[ERROR] Error executing tests %v", err)
-	}
-
-	log.Printf("[NOTICE] Overall test completion status: %v", s)
-
-	os.Exit(s)
-
-}
 
 func addTest(tm *coreengine.TestStore, n string, g coreengine.Group, c coreengine.Category) {
 
@@ -82,7 +35,8 @@ func addTest(tm *coreengine.TestStore, n string, g coreengine.Group, c coreengin
 }
 
 // RunAllTests ...
-func RunAllTests() (int, error) {
+func RunAllTests() (int, *coreengine.TestStore, error) {
+	// MUST run after SetIOPaths
 	// get the test mgr
 	tm := coreengine.NewTestManager()
 
@@ -93,8 +47,36 @@ func RunAllTests() (int, error) {
 	addTest(tm, "account_manager", coreengine.CloudDriver, coreengine.General)
 
 	//exec 'em all (for now!)
-	return tm.ExecAllTests()
+	s, err := tm.ExecAllTests()
+	return s, tm, err
+}
 
+func GetAllTestResults(ts *coreengine.TestStore) (map[string]string, error) {
+	out := make(map[string]string)
+	for id := range ts.Tests {
+		r, n, err := ReadTestResults(ts, id)
+		if err != nil {
+			return nil, err
+		}
+		if r != "" {
+			out[n] = r
+		}
+	}
+	return out, nil
+}
+
+func ReadTestResults(ts *coreengine.TestStore, id uuid.UUID) (string, string, error) {
+	t, err := ts.GetTest(&id)
+	if err != nil {
+		return "", "", err
+	}
+	r := (*t)[0].Results
+	n := (*t)[0].TestDescriptor.Name
+	if r != nil {
+		b := r.Bytes()
+		return string(b), n, nil
+	}
+	return "", "", nil
 }
 
 // SetIOPaths ...
