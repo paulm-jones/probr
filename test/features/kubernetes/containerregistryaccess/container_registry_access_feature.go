@@ -2,9 +2,9 @@ package containerregistryaccess
 
 import (
 	"github.com/cucumber/godog"
-	"gitlab.com/citihub/probr/internal/clouddriver/kubernetes"
-	"gitlab.com/citihub/probr/internal/coreengine"
-	"gitlab.com/citihub/probr/test/features"
+	"github.com/citihub/probr/internal/clouddriver/kubernetes"
+	"github.com/citihub/probr/internal/coreengine"
+	"github.com/citihub/probr/test/features"
 )
 
 type probState struct {

@@ -9,9 +9,9 @@ import (
 
 	"github.com/cucumber/godog"
 	"github.com/cucumber/godog/colors"
-	"gitlab.com/citihub/probr/internal/config"
+	"github.com/citihub/probr/internal/config"
 
-	"gitlab.com/citihub/probr/internal/coreengine"
+	"github.com/citihub/probr/internal/coreengine"
 )
 
 //this is the "TEST HANDLER" impl  and will get called when probr is invoked from the CLI or API

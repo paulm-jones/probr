@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"gitlab.com/citihub/probr/test/features"
+	"github.com/citihub/probr/test/features"
 )
 
 func Test_LogAndReturnError(t *testing.T) {

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"sync"
 
-	"gitlab.com/citihub/probr/internal/utils"
+	"github.com/citihub/probr/internal/utils"
 )
 
 //EnvVariable ...

@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 
 	"github.com/cucumber/godog"
-	"gitlab.com/citihub/probr/internal/coreengine"
-	"gitlab.com/citihub/probr/test/features"
+	"github.com/citihub/probr/internal/coreengine"
+	"github.com/citihub/probr/test/features"
 )
 
 func init() {

@@ -6,8 +6,8 @@ import (
 	"os"
 	"testing"
 
-	"gitlab.com/citihub/probr/internal/clouddriver/kubernetes"
-	_ "gitlab.com/citihub/probr/internal/config"
+	"github.com/citihub/probr/internal/clouddriver/kubernetes"
+	_ "github.com/citihub/probr/internal/config"
 )
 
 var (

@@ -1,17 +1,17 @@
 package probr
 
 import (
-	"gitlab.com/citihub/probr/internal/clouddriver/kubernetes"
-	"gitlab.com/citihub/probr/internal/coreengine"
+	"github.com/citihub/probr/internal/clouddriver/kubernetes"
+	"github.com/citihub/probr/internal/coreengine"
 
 	"github.com/google/uuid"
 
-	_ "gitlab.com/citihub/probr/internal/config" //needed for logging
-	"gitlab.com/citihub/probr/test/features"
-	_ "gitlab.com/citihub/probr/test/features/clouddriver"
-	_ "gitlab.com/citihub/probr/test/features/kubernetes/containerregistryaccess" //needed to run init on TestHandlers
-	_ "gitlab.com/citihub/probr/test/features/kubernetes/internetaccess"          //needed to run init on TestHandlers
-	_ "gitlab.com/citihub/probr/test/features/kubernetes/podsecuritypolicy"       //needed to run init on TestHandlers
+	_ "github.com/citihub/probr/internal/config" //needed for logging
+	"github.com/citihub/probr/test/features"
+	_ "github.com/citihub/probr/test/features/clouddriver"
+	_ "github.com/citihub/probr/test/features/kubernetes/containerregistryaccess" //needed to run init on TestHandlers
+	_ "github.com/citihub/probr/test/features/kubernetes/internetaccess"          //needed to run init on TestHandlers
+	_ "github.com/citihub/probr/test/features/kubernetes/podsecuritypolicy"       //needed to run init on TestHandlers
 )
 
 //TODO: revise when interface this bit up ...

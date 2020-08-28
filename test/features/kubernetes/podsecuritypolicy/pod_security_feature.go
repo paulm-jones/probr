@@ -4,10 +4,10 @@ package podsecuritypolicy
 
 import (
 	"github.com/cucumber/godog"
-	"gitlab.com/citihub/probr/internal/clouddriver/kubernetes"
-	"gitlab.com/citihub/probr/internal/coreengine"
-	"gitlab.com/citihub/probr/test/features"
-	podsecuritypolicy "gitlab.com/citihub/probr/test/features/kubernetes/podsecuritypolicy/assets"
+	"github.com/citihub/probr/internal/clouddriver/kubernetes"
+	"github.com/citihub/probr/internal/coreengine"
+	"github.com/citihub/probr/test/features"
+	podsecuritypolicy "github.com/citihub/probr/test/features/kubernetes/podsecuritypolicy/assets"
 	apiv1 "k8s.io/api/core/v1"
 )
 

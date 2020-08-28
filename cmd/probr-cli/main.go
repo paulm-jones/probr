@@ -5,14 +5,14 @@ import (
 	"log"
 	"os"
 
-	"gitlab.com/citihub/probr"
-	"gitlab.com/citihub/probr/internal/clouddriver/kubernetes"
+	"github.com/citihub/probr"
+	"github.com/citihub/probr/internal/clouddriver/kubernetes"
 
-	"gitlab.com/citihub/probr/internal/config" //needed for logging
-	// _ "gitlab.com/citihub/probr/test/features/clouddriver"
-	// _ "gitlab.com/citihub/probr/test/features/kubernetes/containerregistryaccess" //needed to run init on TestHandlers
-	// _ "gitlab.com/citihub/probr/test/features/kubernetes/internetaccess"          //needed to run init on TestHandlers
-	// _ "gitlab.com/citihub/probr/test/features/kubernetes/podsecuritypolicy"       //needed to run init on TestHandlers
+	"github.com/citihub/probr/internal/config" //needed for logging
+	// _ "github.com/citihub/probr/test/features/clouddriver"
+	// _ "github.com/citihub/probr/test/features/kubernetes/containerregistryaccess" //needed to run init on TestHandlers
+	// _ "github.com/citihub/probr/test/features/kubernetes/internetaccess"          //needed to run init on TestHandlers
+	// _ "github.com/citihub/probr/test/features/kubernetes/podsecuritypolicy"       //needed to run init on TestHandlers
 )
 
 var (
