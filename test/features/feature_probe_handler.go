@@ -15,8 +15,8 @@ import (
 	"github.com/citihub/probr/internal/coreengine"
 =======
 
-	"gitlab.com/citihub/probr/internal/config"
-	"gitlab.com/citihub/probr/internal/coreengine"
+	"github.com/citihub/probr/internal/config"
+	"github.com/citihub/probr/internal/coreengine"
 >>>>>>> Restructured config logic to use config.Vars.XYZ, and optionally accept yaml config file
 )
 
