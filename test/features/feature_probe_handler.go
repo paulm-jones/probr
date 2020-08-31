@@ -9,9 +9,15 @@ import (
 
 	"github.com/cucumber/godog"
 	"github.com/cucumber/godog/colors"
+<<<<<<< HEAD
 	"github.com/citihub/probr/internal/config"
 
 	"github.com/citihub/probr/internal/coreengine"
+=======
+
+	"gitlab.com/citihub/probr/internal/config"
+	"gitlab.com/citihub/probr/internal/coreengine"
+>>>>>>> Restructured config logic to use config.Vars.XYZ, and optionally accept yaml config file
 )
 
 //this is the "TEST HANDLER" impl  and will get called when probr is invoked from the CLI or API
@@ -20,7 +26,7 @@ import (
 
 //GodogTestHandler ...
 func GodogTestHandler(gd *coreengine.GodogTest) (int, *bytes.Buffer, error) {
-	if *config.GetEnvConfigInstance().GetOutputType() == "INMEM" {
+	if config.Vars.OutputType == "INMEM" {
 		return InMemGodogTestHandler(gd)
 	}
 	return ToFileGodogTestHandler(gd)
