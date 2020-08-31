@@ -117,10 +117,6 @@ func runTest(t *testing.T, mockMethod string, testMethod string) {
 	b, _ = reflectiveCall(psp, testMethod)
 	assert.True(t, *b)                        //expect this to be true ...
 	tmp.AssertNumberOfCalls(t, mockMethod, 3) //expect another call to true (three in total now)
-	psp = kubernetes.NewPSP(nil, &[]kubernetes.SecurityPolicyProvider{fmp, tmp}, config.Vars)
-	b, _ = psp.ClusterHasPSP()
-	assert.True(t, *b)                                   //expect this to be true ...
-	tmp.AssertNumberOfCalls(t, "HasSecurityPolicies", 3) //expect another call to true (three in total now)
 	tmp.AssertExpectations(t)
 	fmp.AssertNumberOfCalls(t, mockMethod, 2) //false should be up to 2 by now ...
 	fmp.AssertExpectations(t)
