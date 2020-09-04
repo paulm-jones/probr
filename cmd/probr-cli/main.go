@@ -23,20 +23,13 @@ var (
 var kube = kubernetes.GetKubeInstance()
 
 func main() {
-<<<<<<< HEAD
-	var v string
-	flag.StringVar(&v, "varsFile", "", "path to config file")
-	i := flag.String("kubeConfig", "", "kube config file")
-	o := flag.String("outputDir", "", "output directory")
-=======
 	var v, ot, t, i, o string
-	
+
 	flag.StringVar(&v, "varsFile", "", "path to config file")
 	flag.StringVar(&ot, "outputType", "INMEM", "output defaults to write in memory, if 'IO' will write to specified output directory")
 	flag.StringVar(&t, "tags", "", "test tags, e.g. -tags=\"@CIS-1.2.3, @CIS-4.5.6\".")
 	flag.StringVar(&i, "kubeConfig", "", "kube config file")
 	flag.StringVar(&o, "outputDir", "", "output directory")
->>>>>>> added tags option to config
 	flag.Parse()
 
 	// Will make config.Vars.XYZ available for the rest of the runtime
