@@ -29,7 +29,6 @@ type NetworkAccess interface {
 // NA ...
 type NA struct {
 	k Kubernetes
-	c config.Config
 
 	testNamespace string
 	testImage     string
@@ -38,10 +37,9 @@ type NA struct {
 }
 
 // NewNA ...
-func NewNA(k Kubernetes, c config.Config) *NA {
+func NewNA(k Kubernetes) *NA {
 	n := &NA{}
 	n.k = k
-	n.c = c
 
 	n.setup()
 	return n
@@ -51,7 +49,6 @@ func NewNA(k Kubernetes, c config.Config) *NA {
 func NewDefaultNA() *NA {
 	n := &NA{}
 	n.k = GetKubeInstance()
-	n.c = config.GetEnvConfigInstance()
 
 	n.setup()
 	return n
@@ -66,11 +63,11 @@ func (n *NA) setup() {
 
 	// image repository + curl from config
 	// but default if not supplied
-	i := *n.c.GetImageRepository()
+	i := config.Vars.Images.Repository
 	if len(i) < 1 {
 		i = defaultNAImageRepository
 	}
-	b := *n.c.GetCurlImage()
+	b := config.Vars.Images.Curl
 	if len(b) < 1 {
 		b = defaultNATestImage
 	}
@@ -108,24 +105,25 @@ func (n *NA) AccessURL(pn *string, url *string) (int, error) {
 	//create a curl command to access the supplied url
 	cmd := "curl -s -o /dev/null -I -L -w %{http_code} " + *url
 	ns := n.testNamespace
-	httpCode, _, ex, err := n.k.ExecCommand(&cmd, &ns, pn)
+	res := n.k.ExecCommand(&cmd, &ns, pn)
+	httpCode := res.Stdout
 
-	log.Printf("[NOTICE] URL: %v HTTP Code: %v Exit Code: %v (error: %v)", *url, httpCode, ex, err)
+	log.Printf("[NOTICE] URL: %v HTTP Code: %v Exit Code: %v (error: %v)", *url, httpCode, res.Code, res.Err)
 
-	if err != nil {
-		//check the exit code.  If it's '6' (Couldn't resolve host.)
+	if res.Err != nil && !res.Internal {
+		//error which is not internal (so external!)
+		//this means code is from the execution of the command on the cluster
+	
+		//Check the exit code.  If it's '6' (Couldn't resolve host.)
 		//then we want to nil out the error and return the code as this
 		//is an expected condition if access is inhibited
-		if ex == 6 {
-			return ex, nil
+		if res.Code == 6 {
+			return res.Code, nil
 		}
-		return -1, err
+		//otherwise return both code & error
+		return res.Code, res.Err
 	}
 
-	httpStatusCode, err := strconv.Atoi(httpCode)
-	if err != nil {
-		return -1, err
-	}
-
-	return httpStatusCode, nil
+	//no errors, so just return code	
+	return strconv.Atoi(httpCode)
 }

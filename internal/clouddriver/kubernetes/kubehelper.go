@@ -3,12 +3,10 @@ package kubernetes
 import (
 	"bytes"
 	"context"
-	"flag"
 	"fmt"
 	"log"
 	"math/rand"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -75,21 +73,35 @@ func (p *PodCreationError) Error() string {
 	return fmt.Sprintf("pod creation error: %v %v", p.ReasonCodes, p.err)
 }
 
+//CmdExecutionResult ...
+type CmdExecutionResult struct {
+	Stdout string
+	Stderr string
+
+	Err      error
+	Code     int
+	Internal bool
+}
+
+func (e *CmdExecutionResult) Error() string {
+	return fmt.Sprintf("cmd execution error - internal=%t code=%v error=%v", e.Internal, e.Code, e.Err)
+}
+
 // Kubernetes ...
 type Kubernetes interface {
 	ClusterIsDeployed() *bool
-	SetKubeConfigFile(f *string)
 	GetClient() (*kubernetes.Clientset, error)
-	GetPods() (*apiv1.PodList, error)
+	GetPods(ns string) (*apiv1.PodList, error)
 	CreatePod(pname *string, ns *string, cname *string, image *string, w bool, sc *apiv1.SecurityContext) (*apiv1.Pod, error)
 	CreatePodFromObject(p *apiv1.Pod, pname *string, ns *string, w bool) (*apiv1.Pod, error)
 	CreatePodFromYaml(y []byte, pname *string, ns *string, image *string, w bool) (*apiv1.Pod, error)
 	GetPodObject(pname string, ns string, cname string, image string, sc *apiv1.SecurityContext) *apiv1.Pod
-	ExecCommand(cmd, ns, pn *string) (string, string, int, error)
+	ExecCommand(cmd, ns, pn *string) *CmdExecutionResult
 	DeletePod(pname *string, ns *string, w bool) error
 	DeleteNamespace(ns *string) error
 	CreateConfigMap(n *string, ns *string) (*apiv1.ConfigMap, error)
 	DeleteConfigMap(n *string, ns *string) error
+	GetConstraintTemplates(prefix *string) (*map[string]interface{}, error)
 }
 
 var instance *Kube
@@ -97,7 +109,6 @@ var once sync.Once
 
 // Kube ...
 type Kube struct {
-	kubeConfigFile            *string
 	kubeClient                *kubernetes.Clientset
 	clientMutex               sync.Mutex
 	azErrorToPodCreationError map[string]PodCreationErrorReason
@@ -141,12 +152,7 @@ func (k *Kube) ClusterIsDeployed() *bool {
 	return &t
 }
 
-//SetKubeConfigFile sets the fully qualified path to the Kubernetes config file.
-func (k *Kube) SetKubeConfigFile(f *string) {
-	k.kubeConfigFile = f
-}
-
-//GetClient gets a client connection to the Kubernetes cluster specifed via @SetKubeConfigFile or from home directory.
+//GetClient gets a client connection to the Kubernetes cluster specifed via config.Vars.KubeConfigPath
 func (k *Kube) GetClient() (*kubernetes.Clientset, error) {
 	k.clientMutex.Lock()
 	defer k.clientMutex.Unlock()
@@ -156,7 +162,7 @@ func (k *Kube) GetClient() (*kubernetes.Clientset, error) {
 	}
 
 	// use the current context in kubeconfig
-	config, err := clientcmd.BuildConfigFromFlags("", *k.setConfigPath())
+	config, err := clientcmd.BuildConfigFromFlags("", config.Vars.KubeConfigPath)
 	if err != nil {
 		return nil, err
 	}
@@ -170,41 +176,14 @@ func (k *Kube) GetClient() (*kubernetes.Clientset, error) {
 	return k.kubeClient, nil
 }
 
-func (k *Kube) setConfigPath() *string {
-	n := "kubeconfig"
-	f := flag.Lookup(n)
-	if f != nil {
-		return &f.DefValue
-	}
-
-	var c *string
-	//prefer kube config path if it's been supplied
-	if k.kubeConfigFile != nil && *k.kubeConfigFile != "" {
-		log.Printf("[NOTICE] Setting Kube Config to: %v", *k.kubeConfigFile)
-		c = flag.String("kubeconfig", *k.kubeConfigFile, "fully qualified and supplied absolute path to the kubeconfig file")
-	} else if e := getConfigPathFromEnv(); e != "" {
-		log.Printf("[NOTICE] Setting Kube Config to: %v", e)
-		c = flag.String("kubeconfig", e, "(optional) absolute path to the kubeconfig file")
-	} else if home := homeDir(); home != "" {
-		p := filepath.Join(home, ".kube", "config")
-		log.Printf("[NOTICE] Setting Kube Config to: %v", p)
-		c = flag.String("kubeconfig", p, "(optional) absolute path to the kubeconfig file")
-	} else {
-		c = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
-	}
-	flag.Parse()
-
-	return c
-}
-
 //GetPods ...
-func (k *Kube) GetPods() (*apiv1.PodList, error) {
+func (k *Kube) GetPods(ns string) (*apiv1.PodList, error) {
 	c, err := k.GetClient()
 	if err != nil {
 		return nil, err
 	}
 
-	pl, err := getPods(c)
+	pl, err := getPods(c, ns)
 	if err != nil {
 		return nil, err
 	}
@@ -212,11 +191,12 @@ func (k *Kube) GetPods() (*apiv1.PodList, error) {
 	return pl, nil
 }
 
-func getPods(c *kubernetes.Clientset) (*apiv1.PodList, error) {
+func getPods(c *kubernetes.Clientset, ns string) (*apiv1.PodList, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	pods, err := c.CoreV1().Pods("").List(ctx, metav1.ListOptions{})
+	pods, err := c.CoreV1().Pods(ns).List(ctx, metav1.ListOptions{})	
+	
 	if err != nil {
 		return nil, err
 	}
@@ -251,7 +231,7 @@ func (k *Kube) CreatePod(pname *string, ns *string, cname *string, image *string
 func (k *Kube) CreatePodFromYaml(y []byte, pname *string, ns *string, image *string, w bool) (*apiv1.Pod, error) {
 
 	decode := scheme.Codecs.UniversalDeserializer().Decode
-	
+
 	o, _, _ := decode(y, nil, nil)
 
 	p := o.(*apiv1.Pod)
@@ -259,7 +239,7 @@ func (k *Kube) CreatePodFromYaml(y []byte, pname *string, ns *string, image *str
 	p.SetName(*pname)
 	//also update the image (which could have been supplied via the env)
 	//(only expecting one container, but loop in case of many)
-	for _, c := range p.Spec.Containers {		
+	for _, c := range p.Spec.Containers {
 		c.Image = *image
 	}
 
@@ -268,6 +248,13 @@ func (k *Kube) CreatePodFromYaml(y []byte, pname *string, ns *string, image *str
 
 // CreatePodFromObject creates a pod from the supplied pod object in the gievn namespace
 func (k *Kube) CreatePodFromObject(p *apiv1.Pod, pname *string, ns *string, w bool) (*apiv1.Pod, error) {
+	if p == nil || pname == nil || ns == nil {
+		return nil, fmt.Errorf("one or more of pod (%v), podName (%v) or namespace (%v) is nil - cannot create POD", p, pname, ns)
+	}
+
+	log.Printf("[NOTICE] Creating pod %v in namespace %v", *pname, *ns)
+	log.Printf("[DEBUG] Pod details: %+v", *p)
+
 	c, err := k.GetClient()
 	if err != nil {
 		return nil, err
@@ -370,13 +357,13 @@ func (k *Kube) CreateConfigMap(n *string, ns *string) (*apiv1.ConfigMap, error) 
 	//now do config map ...
 	cms := c.CoreV1().ConfigMaps(*ns)
 
-	cm := apiv1.ConfigMap {
+	cm := apiv1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      *n,
 			Namespace: *ns,
 			Labels: map[string]string{
 				"app": "demo",
-			},			
+			},
 		},
 		Data: map[string]string{
 			"key": "value",
@@ -389,7 +376,7 @@ func (k *Kube) CreateConfigMap(n *string, ns *string) (*apiv1.ConfigMap, error) 
 	res, err := cms.Create(ctx, &cm, metav1.CreateOptions{})
 
 	if err != nil {
-		log.Printf("[WARN] Error creating ConfigMap %q: %v", res.GetObjectMeta().GetName(), err)			
+		log.Printf("[WARN] Error creating ConfigMap %q: %v", res.GetObjectMeta().GetName(), err)
 		return nil, err
 	}
 
@@ -452,15 +439,15 @@ func defaultContainerSecurityContext() *apiv1.SecurityContext {
 }
 
 //ExecCommand TODO: fix error codes
-func (k *Kube) ExecCommand(cmd, ns, pn *string) (string, string, int, error) {
+func (k *Kube) ExecCommand(cmd, ns, pn *string) (s *CmdExecutionResult) {
 	if cmd == nil {
-		return "", "", -1, fmt.Errorf("command string is nil - nothing to execute")
+		return &CmdExecutionResult{Err: fmt.Errorf("command string is nil - nothing to execute"), Internal: true}
 	}
 	logCmd(cmd, pn, ns)
 
 	c, err := k.GetClient()
 	if err != nil {
-		return "", "", -2, err
+		return &CmdExecutionResult{Err: err, Internal: true}
 	}
 
 	req := c.CoreV1().RESTClient().Post().Resource("pods").
@@ -468,7 +455,7 @@ func (k *Kube) ExecCommand(cmd, ns, pn *string) (string, string, int, error) {
 
 	scheme := runtime.NewScheme()
 	if err := apiv1.AddToScheme(scheme); err != nil {
-		return "", "", -3, fmt.Errorf("error adding to scheme: %v", err)
+		return &CmdExecutionResult{Err: fmt.Errorf("error adding to scheme: %v", err), Internal: true}
 	}
 
 	parameterCodec := runtime.NewParameterCodec(scheme)
@@ -484,10 +471,10 @@ func (k *Kube) ExecCommand(cmd, ns, pn *string) (string, string, int, error) {
 
 	log.Printf("[INFO] ExecCommand Request URL: %v", req.URL().String())
 
-	config, err := clientcmd.BuildConfigFromFlags("", *k.setConfigPath())
+	config, err := clientcmd.BuildConfigFromFlags("", config.Vars.KubeConfigPath)
 	exec, err := remotecommand.NewSPDYExecutor(config, "POST", req.URL())
 	if err != nil {
-		return "", "", -4, fmt.Errorf("error while creating Executor: %v", err)
+		return &CmdExecutionResult{Err: fmt.Errorf("error while creating Executor: %v", err), Internal: true}
 	}
 
 	var stdout, stderr bytes.Buffer
@@ -498,12 +485,15 @@ func (k *Kube) ExecCommand(cmd, ns, pn *string) (string, string, int, error) {
 	})
 	if err != nil {
 		if ce, ok := err.(executil.CodeExitError); ok {
-			return stdout.String(), stderr.String(), ce.Code, fmt.Errorf("error in Stream: %v", err)
+			//the command has been executed on the container, but the underlying command raised an error
+			//this is an 'external' error and represents a successful communication with the cluster
+			return &CmdExecutionResult{Stdout: stdout.String(), Stderr: stderr.String(), Code: ce.Code, Err: fmt.Errorf("error raised on cmd execution: %v", err)}
 		}
-		return stdout.String(), stderr.String(), -5, fmt.Errorf("error in Stream: %v", err)
+		return &CmdExecutionResult{Stdout: stdout.String(), Stderr: stderr.String(), Err: fmt.Errorf("error in Stream: %v", err), Internal: true}
 	}
 
-	return stdout.String(), stderr.String(), 0, nil
+	//all good:
+	return &CmdExecutionResult{Stdout: stdout.String(), Stderr: stderr.String()}
 }
 
 // DeletePod deletes the pod with the following parameters:
@@ -585,6 +575,46 @@ func (k *Kube) DeleteNamespace(ns *string) error {
 	log.Printf("[NOTICE] Namespace %v deleted.", *ns)
 
 	return nil
+}
+
+//GetConstraintTemplates returns the constraint templates associated with the active cluster.
+func (k *Kube) GetConstraintTemplates(prefix *string) (*map[string]interface{}, error) {
+	c, err := k.GetClient()
+	if err != nil {
+		return nil, err
+	}
+
+	_, arl, err := c.ServerGroupsAndResources()
+
+	if err != nil {
+		return nil, err
+	}
+
+	var con = make(map[string]interface{})
+	for _, ar := range arl {
+		if ar == nil {
+			continue
+		}
+		for _, a := range ar.APIResources {
+			for _, cat := range a.Categories {
+				if cat == "constraint" {
+					log.Printf("[INFO] CONSTRAINT Resource - Name: %v Category: %v Kind: %v", a.Name, cat, a.Kind)
+					//skip if it doesn't pass the prefix filter (if one has been supplied):
+					if prefix != nil && !strings.HasPrefix(a.Name, *prefix) {
+						continue
+					}
+					//treat it like a set ...
+					_, exists := con[a.Name]
+					if !exists {
+						con[a.Name] = nil
+					}
+				}
+			}
+		}
+	}
+
+	return &con, nil
+
 }
 
 func isAlreadyExists(err error) bool {
@@ -750,7 +780,7 @@ func homeDir() string {
 }
 
 func getConfigPathFromEnv() string {
-	return *config.GetEnvConfigInstance().GetKubeConfigPath()
+	return config.Vars.KubeConfigPath
 }
 
 func logCmd(c *string, p *string, n *string) {

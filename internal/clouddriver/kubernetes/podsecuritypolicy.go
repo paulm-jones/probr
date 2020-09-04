@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/citihub/probr/internal/clouddriver/azure"
 	"github.com/citihub/probr/internal/config"
 	"github.com/citihub/probr/internal/utils"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -55,6 +54,12 @@ func (c PSPTestCommand) String() string {
 		"ls"}[c]
 }
 
+// PSPVerificationProbe ...
+type PSPVerificationProbe struct {
+	Cmd              PSPTestCommand
+	ExpectedExitCode int
+}
+
 const (
 	//default values.  Overrides can be supplied via the environment.
 	defaultPSPTestNamespace = "probr-pod-security-test-ns"
@@ -86,7 +91,7 @@ type PodSecurityPolicy interface {
 	CreatePODSettingAttributes(hostPID *bool, hostIPC *bool, hostNetwork *bool) (*apiv1.Pod, error)
 	CreatePODSettingCapabilities(c *[]string) (*apiv1.Pod, error)
 	CreatePodFromYaml(y []byte) (*apiv1.Pod, error)
-	ExecPSPTestCmd(pName *string, cmd PSPTestCommand) (int, error)
+	ExecPSPTestCmd(pName *string, cmd PSPTestCommand) (*CmdExecutionResult, error)
 	TeardownPodSecurityTest(p *string) error
 	CreateConfigMap() error
 	DeleteConfigMap() error
@@ -96,7 +101,6 @@ type PodSecurityPolicy interface {
 type PSP struct {
 	k                       Kubernetes
 	securityPolicyProviders *[]SecurityPolicyProvider
-	c                       config.Config
 
 	testNamespace string
 	testImage     string
@@ -105,11 +109,10 @@ type PSP struct {
 }
 
 // NewPSP ...
-func NewPSP(k Kubernetes, sp *[]SecurityPolicyProvider, c config.Config) *PSP {
+func NewPSP(k Kubernetes, sp *[]SecurityPolicyProvider) *PSP {
 	p := &PSP{}
 	p.k = k
 	p.securityPolicyProviders = sp
-	p.c = c
 
 	p.setenv()
 	return p
@@ -122,10 +125,8 @@ func NewDefaultPSP() *PSP {
 
 	//standard security providers
 	p.securityPolicyProviders = &[]SecurityPolicyProvider{
-		NewKubeSecurityPolicyProvider(p.k),
-		azure.NewAzPolicyProvider()}
-
-	p.c = config.GetEnvConfigInstance()
+		NewKubePodSecurityPolicyProvider(p.k),
+		NewAzK8sConstraintTemplate(p.k)}
 
 	p.setenv()
 	return p
@@ -141,11 +142,11 @@ func (psp *PSP) setenv() {
 
 	// image repository + busy box from config
 	// but default if not supplied
-	i := *psp.c.GetImageRepository()
+	i := config.Vars.Images.Repository
 	if len(i) < 1 {
 		i = defaultPSPImageRepository
 	}
-	b := *psp.c.GetBusyBoxImage()
+	b := config.Vars.Images.BusyBox
 	if len(b) < 1 {
 		b = defaultPSPTestImage
 	}
@@ -160,271 +161,295 @@ func (psp *PSP) ClusterIsDeployed() *bool {
 
 //ClusterHasPSP determines if the cluster has any Pod Security Policies set.
 func (psp *PSP) ClusterHasPSP() (*bool, error) {
-	var err error = nil
-	var ret *bool = nil
+	var err error
+	var ret, success bool
 
 	// iterate over providers ...
 	for _, p := range *psp.securityPolicyProviders {
-		//defend ..
 		if p == nil {
 			continue
 		}
-
-		b, e := p.HasSecurityPolicies()
-		if e != nil {
-			//hold onto the error and continue
-			err = e
-			continue
+		if makeSecurityPolicyCall(p.HasSecurityPolicies, &ret, &success, &err) {
+			break
 		}
-		if *b {
-			//return on first 'true' - only trying to establish if we have any ...
-			//nil out any errors
-			return b, nil
-		}
-		//if no policies (but a successful call), then make sure the ret value is set
-		ret = b
 	}
 
-	//if we get to here, we haven't got any, but that could have been because of
-	//errors from all providers, in which case "ret" will be nil
-	if ret != nil {
+	//if we 've had a success, ignore the error ...
+	if success {
 		//then we've made at least one successful call - nil out err, for client simplification
-		return ret, nil
+		return &ret, nil
 	}
 
 	//otherwise just return
-	return ret, err
+	return &ret, err
 }
 
 //PrivilegedAccessIsRestricted looks for a PodSecurityPolicy with 'Privileged' set to false (ie. NOT privileged).
 func (psp *PSP) PrivilegedAccessIsRestricted() (*bool, error) {
+	var err error
+	var ret, success bool
+
 	// iterate over providers ...
 	for _, p := range *psp.securityPolicyProviders {
-		b, err := p.HasPrivilegedAccessRestriction()
-		if err != nil {
-			return nil, err
+		if p == nil {
+			continue
 		}
-		if b != nil && *b {
-			//return on first 'true' - only trying to establish if we have any ...
-			return b, nil
+		if makeSecurityPolicyCall(p.HasPrivilegedAccessRestriction, &ret, &success, &err) {
+			break
 		}
 	}
 
-	//if we get to here, we haven't got any ...
-	b := false
-	return &b, nil
+	return logAndReturn("PrivilegedAccessIsRestricted", success, ret, err)
 }
 
 //HostPIDIsRestricted looks for a PodSecurityPolicy with 'HostPID' set to false (i.e. NO Access to HostPID ).
 func (psp *PSP) HostPIDIsRestricted() (*bool, error) {
+	var err error
+	var ret, success bool
+
 	// iterate over providers ...
 	for _, p := range *psp.securityPolicyProviders {
-		b, err := p.HasHostPIDRestriction()
-		if err != nil {
-			return nil, err
+		if p == nil {
+			continue
 		}
-		if *b {
-			//return on first 'true' - only trying to establish if we have any ...
-			return b, nil
+		if makeSecurityPolicyCall(p.HasHostPIDRestriction, &ret, &success, &err) {
+			break
 		}
 	}
 
-	//if we get to here, we haven't got any ...
-	b := false
-	return &b, nil
-
+	return logAndReturn("HostPIDIsRestricted", success, ret, err)
 }
 
 //HostIPCIsRestricted looks for a PodSecurityPolicy with 'HostIPC' set to false (i.e. NO Access to HostIPC ).
 func (psp *PSP) HostIPCIsRestricted() (*bool, error) {
+	var err error
+	var ret, success bool
+
 	// iterate over providers ...
 	for _, p := range *psp.securityPolicyProviders {
-		b, err := p.HasHostIPCRestriction()
-		if err != nil {
-			return nil, err
+		if p == nil {
+			continue
 		}
-		if *b {
-			//return on first 'true' - only trying to establish if we have any ...
-			return b, nil
+		if makeSecurityPolicyCall(p.HasHostIPCRestriction, &ret, &success, &err) {
+			break
 		}
 	}
 
-	//if we get to here, we haven't got any ...
-	b := false
-	return &b, nil
-
+	return logAndReturn("HostIPCIsRestricted", success, ret, err)
 }
 
 //HostNetworkIsRestricted looks for a PodSecurityPolicy with 'HostIPC' set to false (i.e. NO Access to HostIPC ).
 func (psp *PSP) HostNetworkIsRestricted() (*bool, error) {
+	var err error
+	var ret, success bool
+
 	// iterate over providers ...
 	for _, p := range *psp.securityPolicyProviders {
-		b, err := p.HasHostNetworkRestriction()
-		if err != nil {
-			return nil, err
+		if p == nil {
+			continue
 		}
-		if *b {
-			//return on first 'true' - only trying to establish if we have any ...
-			return b, nil
+		if makeSecurityPolicyCall(p.HasHostNetworkRestriction, &ret, &success, &err) {
+			break
 		}
 	}
 
-	//if we get to here, we haven't got any ...
-	b := false
-	return &b, nil
-
+	return logAndReturn("HostNetworkIsRestricted", success, ret, err)
 }
 
 //PrivilegedEscalationIsRestricted looks for a PodSecurityPolicy with 'Privileged' set to false (ie. NOT privileged).
 func (psp *PSP) PrivilegedEscalationIsRestricted() (*bool, error) {
+	var err error
+	var ret, success bool
+
 	// iterate over providers ...
 	for _, p := range *psp.securityPolicyProviders {
-		b, err := p.HasAllowPrivilegeEscalationRestriction()
-		if err != nil {
-			return nil, err
+		if p == nil {
+			continue
 		}
-		if b != nil && *b {
-			//return on first 'true' - only trying to establish if we have any ...
-			return b, nil
+		if makeSecurityPolicyCall(p.HasAllowPrivilegeEscalationRestriction, &ret, &success, &err) {
+			break
 		}
 	}
 
-	//if we get to here, we haven't got any ...
-	b := false
-	return &b, nil
+	return logAndReturn("PrivilegedEscalationIsRestricted", success, ret, err)
 }
 
 // RootUserIsRestricted ...
 func (psp *PSP) RootUserIsRestricted() (*bool, error) {
+	var err error
+	var ret, success bool
+
 	// iterate over providers ...
 	for _, p := range *psp.securityPolicyProviders {
-		b, err := p.HasRootUserRestriction()
-		if err != nil {
-			return nil, err
+		if p == nil {
+			continue
 		}
-		if b != nil && *b {
-			//return on first 'true' - only trying to establish if we have any ...
-			return b, nil
+		if makeSecurityPolicyCall(p.HasRootUserRestriction, &ret, &success, &err) {
+			break
 		}
 	}
 
-	//if we get to here, we haven't got any ...
-	b := false
-	return &b, nil
+	return logAndReturn("RootUserIsRestricted", success, ret, err)
 }
 
 //NETRawIsRestricted looks for a PodSecurityPolicy with 'Privileged' set to false (ie. NOT privileged).
 func (psp *PSP) NETRawIsRestricted() (*bool, error) {
+	var err error
+	var ret, success bool
+
 	// iterate over providers ...
 	for _, p := range *psp.securityPolicyProviders {
-		b, err := p.HasNETRAWRestriction()
-		if err != nil {
-			return nil, err
+		if p == nil {
+			continue
 		}
-		if b != nil && *b {
-			//return on first 'true' - only trying to establish if we have any ...
-			return b, nil
+		if makeSecurityPolicyCall(p.HasNETRAWRestriction, &ret, &success, &err) {
+			break
 		}
 	}
 
-	//if we get to here, we haven't got any ...
-	b := false
-	return &b, nil
+	return logAndReturn("NETRawIsRestricted", success, ret, err)
 }
 
 //AllowedCapabilitiesAreRestricted looks for a PodSecurityPolicy with 'Privileged' set to false (ie. NOT privileged).
 func (psp *PSP) AllowedCapabilitiesAreRestricted() (*bool, error) {
+	var err error
+	var ret, success bool
+
 	// iterate over providers ...
 	for _, p := range *psp.securityPolicyProviders {
-		b, err := p.HasAllowedCapabilitiesRestriction()
-		if err != nil {
-			return nil, err
+		if p == nil {
+			continue
 		}
-		if b != nil && *b {
-			//return on first 'true' - only trying to establish if we have any ...
-			return b, nil
+		if makeSecurityPolicyCall(p.HasAllowedCapabilitiesRestriction, &ret, &success, &err) {
+			break
 		}
 	}
 
-	//if we get to here, we haven't got any ...
-	b := false
-	return &b, nil
+	return logAndReturn("AllowedCapabilitiesAreRestricted", success, ret, err)
 }
 
 //AssignedCapabilitiesAreRestricted looks for a PodSecurityPolicy with 'Privileged' set to false (ie. NOT privileged).
 func (psp *PSP) AssignedCapabilitiesAreRestricted() (*bool, error) {
+	var err error
+	var ret, success bool
+
 	// iterate over providers ...
 	for _, p := range *psp.securityPolicyProviders {
-		b, err := p.HasAssignedCapabilitiesRestriction()
-		if err != nil {
-			return nil, err
+		if p == nil {
+			continue
 		}
-		if b != nil && *b {
-			//return on first 'true' - only trying to establish if we have any ...
-			return b, nil
+		if makeSecurityPolicyCall(p.HasAssignedCapabilitiesRestriction, &ret, &success, &err) {
+			break
 		}
 	}
 
-	//if we get to here, we haven't got any ...
-	b := false
-	return &b, nil
+	return logAndReturn("AssignedCapabilitiesAreRestricted", success, ret, err)
 }
 
 // HostPortsAreRestricted ...
 func (psp *PSP) HostPortsAreRestricted() (*bool, error) {
+	var err error
+	var ret, success bool
+
 	// iterate over providers ...
 	for _, p := range *psp.securityPolicyProviders {
-		b, err := p.HasHostPortRestriction()
-		if err != nil {
-			return nil, err
+		if p == nil {
+			continue
 		}
-		if b != nil && *b {
-			//return on first 'true' - only trying to establish if we have any ...
-			return b, nil
+		if makeSecurityPolicyCall(p.HasHostPortRestriction, &ret, &success, &err) {
+			break
 		}
 	}
 
-	//if we get to here, we haven't got any ...
-	b := false
-	return &b, nil
+	return logAndReturn("HostPortsAreRestricted", success, ret, err)
 }
 
 // VolumeTypesAreRestricted ...
 func (psp *PSP) VolumeTypesAreRestricted() (*bool, error) {
+	var err error
+	var ret, success bool
+
 	// iterate over providers ...
 	for _, p := range *psp.securityPolicyProviders {
-		b, err := p.HasVolumeTypeRestriction()
-		if err != nil {
-			return nil, err
+		if p == nil {
+			continue
 		}
-		if b != nil && *b {
-			//return on first 'true' - only trying to establish if we have any ...
-			return b, nil
+		if makeSecurityPolicyCall(p.HasVolumeTypeRestriction, &ret, &success, &err) {
+			break
 		}
 	}
 
-	//if we get to here, we haven't got any ...
-	b := false
-	return &b, nil
+	return logAndReturn("VolumeTypesAreRestricted", success, ret, err)
 }
 
 // SeccompProfilesAreRestricted ...
 func (psp *PSP) SeccompProfilesAreRestricted() (*bool, error) {
+	var err error
+	var ret, success bool
+
 	// iterate over providers ...
 	for _, p := range *psp.securityPolicyProviders {
-		b, err := p.HasSeccompProfileRestriction()
-		if err != nil {
-			return nil, err
+		if p == nil {
+			continue
 		}
-		if b != nil && *b {
-			//return on first 'true' - only trying to establish if we have any ...
-			return b, nil
+		if makeSecurityPolicyCall(p.HasSeccompProfileRestriction, &ret, &success, &err) {
+			break
 		}
 	}
 
-	//if we get to here, we haven't got any ...
-	b := false
-	return &b, nil
+	return logAndReturn("SeccompProfilesAreRestricted", success, ret, err)
+}
+
+//convenience func to call the supplied 'SecurityPolicy' call and manage the results.
+//Expects two bool pointers, one to track overall result and one to capture if any successful call has been made.
+//Also requires an error pointer which will be updated based on supplied func call.
+//The returned bool informs the caller on whether or not to break the loop, "true" indicating the loop can be broken.
+func makeSecurityPolicyCall(f func() (*bool, error), b *bool, s *bool, e *error) bool {
+
+	res, err := f()
+
+	if err != nil {
+		//hold onto the error
+		*e = err
+		//return false to the caller so loop will be continued
+		return false
+	}
+	if res != nil {
+		//set the overall result
+		*b = *res
+
+		//if we've got a result (irrespective of true/false), then we've had a successful, i.e. non-error call
+		//update the success flag to capture
+		//(note: this shouldn't be updated on futher errors - at least one success is all that's needed)
+		*s = true
+
+		if *res {
+			//if true, we've got a successful result and loop can break
+			return true
+		}
+	}
+
+	return false
+}
+
+//logAndReturn is a convenience function for processing the results of a security policy call.
+//It logs the test name and result.
+//Parameters:
+//t - string: test name
+//s - bool: success / fail
+//r - bool: overall result
+//e - error
+func logAndReturn(t string, s bool, r bool, e error) (*bool, error) {
+	log.Printf("[NOTICE] Security Policy check: %q.  Overall result: %t. (error: %v)", t, r, e)
+
+	//if we 've had a success, ignore the error ...
+	if s {
+		//then we've made at least one successful call - nil out err, for client simplification
+		return &r, nil
+	}
+
+	//otherwise just return
+	return &r, e
 }
 
 // CreatePODSettingSecurityContext creates POD with a SecurityContext conforming to the parameters:
@@ -536,7 +561,7 @@ func (psp *PSP) CreatePodFromYaml(y []byte) (*apiv1.Pod, error) {
 }
 
 // ExecPSPTestCmd ...
-func (psp *PSP) ExecPSPTestCmd(pName *string, cmd PSPTestCommand) (int, error) {
+func (psp *PSP) ExecPSPTestCmd(pName *string, cmd PSPTestCommand) (*CmdExecutionResult, error) {
 	var pn string
 	//if we've not been given a pod name, assume one needs to be created:
 	if pName == nil {
@@ -545,7 +570,7 @@ func (psp *PSP) ExecPSPTestCmd(pName *string, cmd PSPTestCommand) (int, error) {
 		p, err := psp.CreatePODSettingSecurityContext(&f, &f, nil)
 
 		if err != nil {
-			return -1, err
+			return nil, err
 		}
 		//grab the pod name:
 		pn = p.GetObjectMeta().GetName()
@@ -555,15 +580,12 @@ func (psp *PSP) ExecPSPTestCmd(pName *string, cmd PSPTestCommand) (int, error) {
 
 	c := cmd.String()
 	ns := psp.testNamespace
-	stdout, _, ex, err := psp.k.ExecCommand(&c, &ns, &pn)
+	res := psp.k.ExecCommand(&c, &ns, &pn)
 
-	log.Printf("[NOTICE] ExecPSPTestCmd: %v stdout: %v exit code: %v (error: %v)", cmd, stdout, ex, err)
+	log.Printf("[NOTICE] ExecPSPTestCmd: %v stdout: %v exit code: %v (error: %v)", cmd, res.Stdout, res.Code, res.Err)
 
-	if err != nil {		
-		return ex, err
-	}
-
-	return ex, nil
+	
+	return res, nil
 }
 
 // CreateConfigMap ...
@@ -573,9 +595,9 @@ func (psp *PSP) CreateConfigMap() error {
 	_, err := psp.k.CreateConfigMap(utils.StringPtr("test-config-map"), &psp.testNamespace)
 
 	if err != nil {
-		log.Printf("[NOTICE] Failed to create test config map: %v", err)		
+		log.Printf("[NOTICE] Failed to create test config map: %v", err)
 	}
-	
+
 	return err
 }
 
@@ -591,19 +613,19 @@ func (psp *PSP) TeardownPodSecurityTest(p *string) error {
 	return err
 }
 
-// KubeSecurityPolicyProvider ...
-type KubeSecurityPolicyProvider struct {
+// KubePodSecurityPolicyProvider ...
+type KubePodSecurityPolicyProvider struct {
 	k        Kubernetes
 	psps     *v1beta1.PodSecurityPolicyList
 	pspMutex sync.Mutex
 }
 
-// NewKubeSecurityPolicyProvider ...
-func NewKubeSecurityPolicyProvider(k Kubernetes) *KubeSecurityPolicyProvider {
-	return &KubeSecurityPolicyProvider{k: k}
+// NewKubePodSecurityPolicyProvider ...
+func NewKubePodSecurityPolicyProvider(k Kubernetes) *KubePodSecurityPolicyProvider {
+	return &KubePodSecurityPolicyProvider{k: k}
 }
 
-func (p *KubeSecurityPolicyProvider) getPolicies() (*v1beta1.PodSecurityPolicyList, error) {
+func (p *KubePodSecurityPolicyProvider) getPolicies() (*v1beta1.PodSecurityPolicyList, error) {
 	p.pspMutex.Lock()
 	defer p.pspMutex.Unlock()
 
@@ -619,7 +641,7 @@ func (p *KubeSecurityPolicyProvider) getPolicies() (*v1beta1.PodSecurityPolicyLi
 }
 
 // HasSecurityPolicies ...
-func (p *KubeSecurityPolicyProvider) HasSecurityPolicies() (*bool, error) {
+func (p *KubePodSecurityPolicyProvider) HasSecurityPolicies() (*bool, error) {
 	psps, err := p.getPolicies()
 	if err != nil {
 		return nil, err
@@ -630,7 +652,7 @@ func (p *KubeSecurityPolicyProvider) HasSecurityPolicies() (*bool, error) {
 }
 
 // HasPrivilegedAccessRestriction ...
-func (p *KubeSecurityPolicyProvider) HasPrivilegedAccessRestriction() (*bool, error) {
+func (p *KubePodSecurityPolicyProvider) HasPrivilegedAccessRestriction() (*bool, error) {
 	psps, err := p.getPolicies()
 	if err != nil {
 		return nil, err
@@ -640,22 +662,17 @@ func (p *KubeSecurityPolicyProvider) HasPrivilegedAccessRestriction() (*bool, er
 	var res bool
 	for _, e := range psps.Items {
 		if !e.Spec.Privileged {
-			log.Printf("[NOTICE] Privileged is set to %v on Policy: %v", e.Spec.Privileged, e.GetName())
+			log.Printf("[INFO] PodSecurityPolicy: Privileged is set to %v on Policy: %v", e.Spec.Privileged, e.GetName())
 			res = true
 			break
 		}
 	}
 
-	if !res {
-		log.Printf("[NOTICE] NO Policies found with Privileged set.\n")
-	}
-
 	return &res, nil
-
 }
 
 // HasHostPIDRestriction ...
-func (p *KubeSecurityPolicyProvider) HasHostPIDRestriction() (*bool, error) {
+func (p *KubePodSecurityPolicyProvider) HasHostPIDRestriction() (*bool, error) {
 	psps, err := p.getPolicies()
 	if err != nil {
 		return nil, err
@@ -665,22 +682,17 @@ func (p *KubeSecurityPolicyProvider) HasHostPIDRestriction() (*bool, error) {
 	var res bool
 	for _, e := range psps.Items {
 		if !e.Spec.HostPID {
-			log.Printf("[NOTICE] HostPID is set to %v on Policy: %v\n", e.Spec.HostPID, e.GetName())
+			log.Printf("[INFO] PodSecurityPolicy: HostPID is set to %v on Policy: %v\n", e.Spec.HostPID, e.GetName())
 			res = true
 			break
 		}
 	}
 
-	if !res {
-		log.Printf("[NOTICE] NO Policies found with HostPID set.\n")
-	}
-
 	return &res, nil
-
 }
 
 // HasHostIPCRestriction ...
-func (p *KubeSecurityPolicyProvider) HasHostIPCRestriction() (*bool, error) {
+func (p *KubePodSecurityPolicyProvider) HasHostIPCRestriction() (*bool, error) {
 	psps, err := p.getPolicies()
 	if err != nil {
 		return nil, err
@@ -690,22 +702,17 @@ func (p *KubeSecurityPolicyProvider) HasHostIPCRestriction() (*bool, error) {
 	var res bool
 	for _, e := range psps.Items {
 		if !e.Spec.HostIPC {
-			log.Printf("[NOTICE] HostIPC is set to %v on Policy: %v\n", e.Spec.HostIPC, e.GetName())
+			log.Printf("[INFO] PodSecurityPolicy: HostIPC is set to %v on Policy: %v\n", e.Spec.HostIPC, e.GetName())
 			res = true
 			break
 		}
 	}
 
-	if !res {
-		log.Printf("[NOTICE] NO Policies found with HostIPC set.\n")
-	}
-
 	return &res, nil
-
 }
 
 // HasHostNetworkRestriction ...
-func (p *KubeSecurityPolicyProvider) HasHostNetworkRestriction() (*bool, error) {
+func (p *KubePodSecurityPolicyProvider) HasHostNetworkRestriction() (*bool, error) {
 	psps, err := p.getPolicies()
 	if err != nil {
 		return nil, err
@@ -715,22 +722,17 @@ func (p *KubeSecurityPolicyProvider) HasHostNetworkRestriction() (*bool, error) 
 	var res bool
 	for _, e := range psps.Items {
 		if !e.Spec.HostNetwork {
-			log.Printf("[NOTICE] HostNetwork is set to %v on Policy: %v\n", e.Spec.HostNetwork, e.GetName())
+			log.Printf("[INFO] PodSecurityPolicy: HostNetwork is set to %v on Policy: %v\n", e.Spec.HostNetwork, e.GetName())
 			res = true
 			break
 		}
 	}
 
-	if !res {
-		log.Printf("[NOTICE] NO Policies found with HostNetwork set.\n")
-	}
-
 	return &res, nil
-
 }
 
 // HasAllowPrivilegeEscalationRestriction ...
-func (p *KubeSecurityPolicyProvider) HasAllowPrivilegeEscalationRestriction() (*bool, error) {
+func (p *KubePodSecurityPolicyProvider) HasAllowPrivilegeEscalationRestriction() (*bool, error) {
 	psps, err := p.getPolicies()
 	if err != nil {
 		return nil, err
@@ -740,22 +742,17 @@ func (p *KubeSecurityPolicyProvider) HasAllowPrivilegeEscalationRestriction() (*
 	var res bool
 	for _, e := range psps.Items {
 		if !*e.Spec.AllowPrivilegeEscalation {
-			log.Printf("[NOTICE] AllowPrivilegeEscalation is set to %v on Policy: %v", e.Spec.AllowPrivilegeEscalation, e.GetName())
+			log.Printf("[INFO] PodSecurityPolicy: AllowPrivilegeEscalation is set to %v on Policy: %v", e.Spec.AllowPrivilegeEscalation, e.GetName())
 			res = true
 			break
 		}
 	}
 
-	if !res {
-		log.Printf("[NOTICE] NO Policies found with AllowPrivilegeEscalation set.\n")
-	}
-
 	return &res, nil
-
 }
 
 // HasRootUserRestriction ...
-func (p *KubeSecurityPolicyProvider) HasRootUserRestriction() (*bool, error) {
+func (p *KubePodSecurityPolicyProvider) HasRootUserRestriction() (*bool, error) {
 	psps, err := p.getPolicies()
 	if err != nil {
 		return nil, err
@@ -765,21 +762,17 @@ func (p *KubeSecurityPolicyProvider) HasRootUserRestriction() (*bool, error) {
 	var res bool
 	for _, e := range psps.Items {
 		if e.Spec.RunAsUser.Rule == v1beta1.RunAsUserStrategyMustRunAsNonRoot {
-			log.Printf("[NOTICE] RunAsUserStrategyMustRunAsNonRoot is set on Policy: %v", e.GetName())
+			log.Printf("[INFO] PodSecurityPolicy: RunAsUserStrategyMustRunAsNonRoot is set on Policy: %v", e.GetName())
 			res = true
 			break
 		}
-	}
-
-	if !res {
-		log.Printf("[NOTICE] NO Policies found with AllowPrivilegeEscalation set.\n")
 	}
 
 	return &res, nil
 }
 
 // HasNETRAWRestriction ...
-func (p *KubeSecurityPolicyProvider) HasNETRAWRestriction() (*bool, error) {
+func (p *KubePodSecurityPolicyProvider) HasNETRAWRestriction() (*bool, error) {
 	psps, err := p.getPolicies()
 	if err != nil {
 		return nil, err
@@ -790,22 +783,18 @@ func (p *KubeSecurityPolicyProvider) HasNETRAWRestriction() (*bool, error) {
 	for _, e := range psps.Items {
 		for _, c := range e.Spec.RequiredDropCapabilities {
 			if c == "NET_RAW" || c == "ALL" {
-				log.Printf("[NOTICE] HasNETRAWRestriction: RequiredDropCapability of %v is set on Policy: %v", c, e.GetName())
+				log.Printf("[INFO] PodSecurityPolicy: HasNETRAWRestriction: RequiredDropCapability of %v is set on Policy: %v", c, e.GetName())
 				res = true
 				break
 			}
 		}
 	}
 
-	if !res {
-		log.Printf("[NOTICE] HasNETRAWRestriction: NO Policies found with RequiredDropCapability of NET_RAW set.")
-	}
-
 	return &res, nil
 }
 
 // HasAllowedCapabilitiesRestriction ...
-func (p *KubeSecurityPolicyProvider) HasAllowedCapabilitiesRestriction() (*bool, error) {
+func (p *KubePodSecurityPolicyProvider) HasAllowedCapabilitiesRestriction() (*bool, error) {
 	psps, err := p.getPolicies()
 	if err != nil {
 		return nil, err
@@ -815,37 +804,38 @@ func (p *KubeSecurityPolicyProvider) HasAllowedCapabilitiesRestriction() (*bool,
 	res := true
 	for _, e := range psps.Items {
 		if e.Spec.AllowedCapabilities != nil && len(e.Spec.AllowedCapabilities) > 0 {
-			log.Printf("[NOTICE] HasAllowedCapabilitiesRestriction: at least one AllowedCapability is set on Policy: %v", e.GetName())
+			log.Printf("[INFO] PodSecurityPolicy: HasAllowedCapabilitiesRestriction: at least one AllowedCapability is set on Policy: %v", e.GetName())
 			res = false
 			break
 		}
-	}
-
-	if res {
-		log.Printf("[NOTICE] HasNETRAWRestriction: NO Policies found with AllowedCapabilities")
 	}
 
 	return &res, nil
 }
 
 // HasAssignedCapabilitiesRestriction ...
-func (p *KubeSecurityPolicyProvider) HasAssignedCapabilitiesRestriction() (*bool, error) {
-	return utils.BoolPtr(false), nil
+func (p *KubePodSecurityPolicyProvider) HasAssignedCapabilitiesRestriction() (*bool, error) {
+	//TODO: review - doesn't appear to be a PSP to enforce this
+	b := false
+	log.Printf("[INFO] PodSecurityPolicy: HasAssignedCapabilitiesRestriction defaulting to %t", b)
+	return &b, nil
 }
 
 // HasHostPortRestriction ...
-func (p *KubeSecurityPolicyProvider) HasHostPortRestriction() (*bool, error) {
+func (p *KubePodSecurityPolicyProvider) HasHostPortRestriction() (*bool, error) {
 	//TODO: review this. From one view, this is always true as ports are locked down by
 	//default and only opened via the hostport range on a PSP.  Which ports are allowed
 	//to be open will be a case by case basis.
 	//For now return 'true' as, theoretically, there is a 'host port restriction'
 	//(see: https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#hostportrange-v1beta1-policy)
 
-	return utils.BoolPtr(true), nil
+	b := true
+	log.Printf("[INFO] PodSecurityPolicy: HasHostPortRestriction defaulting to %t", b)
+	return &b, nil
 }
 
 // HasVolumeTypeRestriction ...
-func (p *KubeSecurityPolicyProvider) HasVolumeTypeRestriction() (*bool, error) {
+func (p *KubePodSecurityPolicyProvider) HasVolumeTypeRestriction() (*bool, error) {
 	psps, err := p.getPolicies()
 	if err != nil {
 		return nil, err
@@ -866,7 +856,7 @@ func (p *KubeSecurityPolicyProvider) HasVolumeTypeRestriction() (*bool, error) {
 		for _, v := range e.Spec.Volumes {
 			_, exists := g[string(v)]
 			if !exists {
-				log.Printf("[NOTICE] HasVolumeTypeRestriction: at least one unapproved volume type (%v) is set on Policy: %v",
+				log.Printf("[INFO] PodSecurityPolicy: HasVolumeTypeRestriction: at least one unapproved volume type (%v) is set on Policy: %v",
 					v, e.GetName())
 				res = false
 				break
@@ -874,15 +864,11 @@ func (p *KubeSecurityPolicyProvider) HasVolumeTypeRestriction() (*bool, error) {
 		}
 	}
 
-	if res {
-		log.Printf("[NOTICE] HasVolumeTypeRestriction: NO Policies found with unapproved volume types")
-	}
-
 	return &res, nil
 }
 
 // HasSeccompProfileRestriction ...
-func (p *KubeSecurityPolicyProvider) HasSeccompProfileRestriction() (*bool, error) {	
+func (p *KubePodSecurityPolicyProvider) HasSeccompProfileRestriction() (*bool, error) {
 	psps, err := p.getPolicies()
 	if err != nil {
 		return nil, err
@@ -894,21 +880,17 @@ func (p *KubeSecurityPolicyProvider) HasSeccompProfileRestriction() (*bool, erro
 	for _, e := range psps.Items {
 		v, exists := e.Annotations[a]
 		if exists {
-			log.Printf("[NOTICE] HasSeccompProfileRestriction: annotation of %v with value %v is set on Policy: %v",
+			log.Printf("[INFO] PodSecurityPolicy: HasSeccompProfileRestriction: annotation of %v with value %v is set on Policy: %v",
 				a, v, e.GetName())
 			res = true
 			break
 		}
 	}
 
-	if !res {
-		log.Printf("[NOTICE] HasSeccompProfileRestriction: NO Policies found with annotation %v set.", a)
-	}
-
 	return &res, nil
 }
 
-func (p *KubeSecurityPolicyProvider) getPodSecurityPolicies() (*v1beta1.PodSecurityPolicyList, error) {
+func (p *KubePodSecurityPolicyProvider) getPodSecurityPolicies() (*v1beta1.PodSecurityPolicyList, error) {
 	c, err := p.k.GetClient()
 	if err != nil {
 		return nil, err
@@ -930,7 +912,7 @@ func (p *KubeSecurityPolicyProvider) getPodSecurityPolicies() (*v1beta1.PodSecur
 		return nil, fmt.Errorf("Pod Security Polices list returned a nil list")
 	}
 
-	log.Printf("[NOTICE] There are %d psp policies in the cluster\n", len(pspList.Items))
+	log.Printf("[NOTICE] PodSecurityPolicy: There are %d psp policies in the cluster\n", len(pspList.Items))
 
 	for _, e := range pspList.Items {
 		log.Printf("[INFO] PSP: %v \n", e.GetName())

@@ -1,20 +1,17 @@
 stages:
   - lint
-  - infra-build
   - build
   - test
-  - report
   - release
 
-## LINT ##
-
-# TODO: add infra/terraform linting
-
+# LINT ##
 go_lint:
   stage: lint
   image: golang:1.14
-  except:
-    - mirror-config
+  only:
+    - merge_requests
+  artifacts:
+    untracked: true
   before_script:
     - cd $GOPATH/src
     - mkdir -p gitlab.com/$CI_PROJECT_NAMESPACE
@@ -27,49 +24,49 @@ go_lint:
     - golint ./...
     - go vet ./...
 
-# TODO: add policy lint (see CasC)
-
-
-## Infra build ##
-# TODO: add infra build
 
 ## BUILD ##
-
-build_go:
+build_executable:
   stage: build
+  only:
+    - merge_requests
+  artifacts:
+    untracked: true
+  dependencies:
+    - go_lint
   image: golang:1.14
-  except:
-    - mirror-config
-  before_script:
-    - cd $GOPATH/src
-    - mkdir -p gitlab.com/$CI_PROJECT_NAMESPACE
-    - cd gitlab.com/$CI_PROJECT_NAMESPACE
-    - ln -s $CI_PROJECT_DIR
-    - cd $CI_PROJECT_NAME
   script:
-    - go build ./...
+    - go build -o probr cmd/probr-cli/main.go
 
-## TEST ##
 
-unit_go:
+# TEST ##
+unit_tests:
   stage: test
   image: citihub/build:latest
-  except:
-    - mirror-config
+  only:
+    - merge_requests
+  dependencies:
+    - go_lint
   before_script:
     - export TEST_KUBE_CONFIG=/tmp/test-config
     - echo ${kube_config} | base64 -id > $TEST_KUBE_CONFIG
     - export KUBE_CONFIG=$TEST_KUBE_CONFIG
-    - export LOGLEVEL="NOTICE"
-    - export DONT_DELETE="true"
+    - export LOGLEVEL=INFO
   script:
     - cd $CI_PROJECT_DIR/test/unit
     - go test -v ./...
 
-# TODO: run feature/BDD (all CSPs)
-
-## REPORT ##
-# TODO
-
-## RELEASE ##
-# TODO
+test_run:
+  stage: test
+  image: node
+  dependencies: 
+    - build_executable
+  only:
+    - merge_requests
+  before_script:
+    - export TEST_KUBE_CONFIG=/tmp/test-config
+    - echo ${kube_config} | base64 -id > $TEST_KUBE_CONFIG
+    - export KUBE_CONFIG=$TEST_KUBE_CONFIG
+    - export LOGLEVEL=INFO
+  script:
+    - ./probr -tags="@CIS-5.2.1,@CIS-6.1.3,@CIS-6.10" || if [ $? -lt 2 ]; then echo "success"; else exit 1; fi
