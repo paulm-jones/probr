@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"log"
 	"os"
@@ -55,7 +56,8 @@ func main() {
 
 	//exec 'em all (for now!)
 	s, ts, err := probr.RunAllTests()
-
+	audit, _ := json.MarshalIndent(ts.AuditLog.Events, "", "  ")
+	log.Printf("[NOTICE] %s", audit)
 	if err != nil {
 		log.Printf("[ERROR] Error executing tests %v", err)
 		os.Exit(2) // Error code 1 is reserved for probe test failures, and should not fail in CI
