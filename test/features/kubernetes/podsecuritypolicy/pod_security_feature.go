@@ -9,14 +9,6 @@ import (
 	podsecuritypolicy "github.com/citihub/probr/test/features/kubernetes/podsecuritypolicy/assets"
 	"github.com/citihub/probr/test/features/kubernetes/probe"
 	"github.com/cucumber/godog"
-<<<<<<< HEAD
-=======
-	"gitlab.com/citihub/probr/internal/clouddriver/kubernetes"
-	"gitlab.com/citihub/probr/internal/coreengine"
-	"gitlab.com/citihub/probr/test/features"
-	podsecuritypolicy "gitlab.com/citihub/probr/test/features/kubernetes/podsecuritypolicy/assets"
-	"gitlab.com/citihub/probr/test/features/kubernetes/probe"
->>>>>>> refactor to expose ProbeState for reuse
 )
 
 type probeState struct {
@@ -56,7 +48,7 @@ func (p *probeState) aKubernetesClusterExistsWhichWeCanDeployInto() error {
 	b := psp.ClusterIsDeployed()
 
 	if b == nil || !*b {
-		return features.LogAndReturnError("kubernetes cluster is NOT deployed")
+		log.Fatalf("[ERROR] Kubernetes cluster is not deployed")
 	}
 
 	//else we're good ...
@@ -74,27 +66,8 @@ func (p *probeState) theOperationWillWithAnError(res, msg string) error {
 }
 
 func (p *probeState) performAllowedCommand() error {
-<<<<<<< HEAD
 	//'0' exit code as we expect this to succeed
 	return p.runVerificationTest(kubernetes.PSPVerificationProbe{Cmd: kubernetes.Ls, ExpectedExitCode: 0})
-=======
-
-	//check for lack of creation error, i.e. pod was created successfully
-	if p.state.CreationError == nil {
-		// execute 'general allowed' command.  This is a simple inocuous cmd, e.g. ls
-		c := kubernetes.Ls
-		ex, err := psp.ExecPSPTestCmd(&p.state.PodName, c)
-
-		//want this to succeed - no errors & 0 exit code:
-		if err != nil && ex == 0 {
-			return features.LogAndReturnError("allowed command (%v) failed. Exit code: %v Error: %v", c, ex, err)
-		}
-		return nil
-	}
-
-	//pod wasn't created so nothing to test
-	return nil
->>>>>>> refactor to expose ProbeState for reuse
 }
 
 // common helper funcs
@@ -116,7 +89,6 @@ func (p *probeState) runControlTest(cf func() (*bool, error), c string) error {
 	return nil
 }
 
-<<<<<<< HEAD
 func (p *probeState) runVerificationTest(c kubernetes.PSPVerificationProbe) error {
 
 	//check for lack of creation error, i.e. pod was created successfully
@@ -124,14 +96,6 @@ func (p *probeState) runVerificationTest(c kubernetes.PSPVerificationProbe) erro
 		res, err := psp.ExecPSPTestCmd(&p.state.PodName, c.Cmd)
 
 		//analyse the results
-=======
-func (p *probeState) runVerificationTest(c kubernetes.PSPTestCommand) error {
-
-	//check for lack of creation error, i.e. pod was created successfully
-	if p.state.CreationError == nil {
-		ex, err := psp.ExecPSPTestCmd(&p.state.PodName, c)
-		//want this to fail as execution of a command requiring root should be blocked
->>>>>>> refactor to expose ProbeState for reuse
 		if err != nil {
 			//this is an error from trying to execute the command as opposed to
 			//the command itself returning an error
@@ -188,11 +152,7 @@ func (p *probeState) someControlExistsToPreventPrivilegedAccessForKubernetesDepl
 
 func (p *probeState) iShouldNotBeAbleToPerformACommandThatRequiresPrivilegedAccess() error {
 
-<<<<<<< HEAD
 	return p.runVerificationTest(kubernetes.PSPVerificationProbe{Cmd: kubernetes.Chroot, ExpectedExitCode: 1})
-=======
-	return p.runVerificationTest(kubernetes.Chroot)
->>>>>>> refactor to expose ProbeState for reuse
 }
 
 // CIS-5.2.2
@@ -218,11 +178,7 @@ func (p *probeState) someSystemExistsToPreventAKubernetesContainerFromRunningUsi
 
 func (p *probeState) iShouldNotBeAbleToPerformACommandThatProvidesAccessToTheHostPIDNamespace() error {
 
-<<<<<<< HEAD
 	return p.runVerificationTest(kubernetes.PSPVerificationProbe{Cmd: kubernetes.EnterHostPIDNS, ExpectedExitCode: 1})
-=======
-	return p.runVerificationTest(kubernetes.EnterHostPIDNS)
->>>>>>> refactor to expose ProbeState for reuse
 }
 
 //CIS-5.2.3
@@ -247,11 +203,7 @@ func (p *probeState) someSystemExistsToPreventAKubernetesDeploymentFromRunningUs
 
 func (p *probeState) iShouldNotBeAbleToPerformACommandThatProvidesAccessToTheHostIPCNamespace() error {
 
-<<<<<<< HEAD
 	return p.runVerificationTest(kubernetes.PSPVerificationProbe{Cmd: kubernetes.EnterHostIPCNS, ExpectedExitCode: 1})
-=======
-	return p.runVerificationTest(kubernetes.EnterHostIPCNS)
->>>>>>> refactor to expose ProbeState for reuse
 }
 
 //CIS-5.2.4
@@ -274,11 +226,7 @@ func (p *probeState) someSystemExistsToPreventAKubernetesDeploymentFromRunningUs
 }
 func (p *probeState) iShouldNotBeAbleToPerformACommandThatProvidesAccessToTheHostNetworkNamespace() error {
 
-<<<<<<< HEAD
 	return p.runVerificationTest(kubernetes.PSPVerificationProbe{Cmd: kubernetes.EnterHostNetworkNS, ExpectedExitCode: 1})
-=======
-	return p.runVerificationTest(kubernetes.EnterHostNetworkNS)
->>>>>>> refactor to expose ProbeState for reuse
 }
 
 //CIS-5.2.5
@@ -321,11 +269,7 @@ func (p *probeState) someSystemExistsToPreventAKubernetesDeploymentFromRunningAs
 }
 func (p *probeState) theKubernetesDeploymentShouldRunWithANonrootUID() error {
 
-<<<<<<< HEAD
 	return p.runVerificationTest(kubernetes.PSPVerificationProbe{Cmd: kubernetes.VerifyNonRootUID, ExpectedExitCode: 1})
-=======
-	return p.runVerificationTest(kubernetes.VerifyNonRootUID)
->>>>>>> refactor to expose ProbeState for reuse
 }
 
 //CIS-5.2.7
@@ -346,11 +290,7 @@ func (p *probeState) someSystemExistsToPreventAKubernetesDeploymentFromRunningWi
 }
 func (p *probeState) iShouldNotBeAbleToPerformACommandThatRequiresNETRAWCapability() error {
 
-<<<<<<< HEAD
 	return p.runVerificationTest(kubernetes.PSPVerificationProbe{Cmd: kubernetes.NetRawTest, ExpectedExitCode: 1})
-=======
-	return p.runVerificationTest(kubernetes.NetRawTest)
->>>>>>> refactor to expose ProbeState for reuse
 }
 
 //CIS-5.2.8
@@ -372,11 +312,7 @@ func (p *probeState) someSystemExistsToPreventKubernetesDeploymentsWithCapabilit
 }
 func (p *probeState) iShouldNotBeAbleToPerformACommandThatRequiresCapabilitiesOutsideOfTheDefaultSet() error {
 
-<<<<<<< HEAD
 	return p.runVerificationTest(kubernetes.PSPVerificationProbe{Cmd: kubernetes.SpecialCapTest, ExpectedExitCode: 2})
-=======
-	return p.runVerificationTest(kubernetes.SpecialCapTest)
->>>>>>> refactor to expose ProbeState for reuse
 }
 
 //CIS-5.2.9
@@ -400,11 +336,7 @@ func (p *probeState) someSystemExistsToPreventKubernetesDeploymentsWithAssignedC
 
 func (p *probeState) iShouldNotBeAbleToPerformACommandThatRequiresAnyCapabilities() error {
 
-<<<<<<< HEAD
 	return p.runVerificationTest(kubernetes.PSPVerificationProbe{Cmd: kubernetes.SpecialCapTest, ExpectedExitCode: 2})
-=======
-	return p.runVerificationTest(kubernetes.SpecialCapTest)
->>>>>>> refactor to expose ProbeState for reuse
 }
 
 //AZ Policy - port range
@@ -436,11 +368,7 @@ func (p *probeState) someSystemExistsToPreventKubernetesDeploymentsWithUnapprove
 
 func (p *probeState) iShouldNotBeAbleToPerformACommandThatAccessAnUnapprovedPortRange() error {
 
-<<<<<<< HEAD
 	return p.runVerificationTest(kubernetes.PSPVerificationProbe{Cmd: kubernetes.NetCat, ExpectedExitCode: 1})
-=======
-	return p.runVerificationTest(kubernetes.NetCat)
->>>>>>> refactor to expose ProbeState for reuse
 }
 
 //AZ Policy - volume type
@@ -505,11 +433,7 @@ func (p *probeState) someSystemExistsToPreventKubernetesDeploymentsWithoutApprov
 }
 func (p *probeState) iShouldNotBeAbleToPerformASystemCallThatIsBlockedByTheSeccompProfile() error {
 
-<<<<<<< HEAD
 	return p.runVerificationTest(kubernetes.PSPVerificationProbe{Cmd: kubernetes.Unshare, ExpectedExitCode: 1})
-=======
-	return p.runVerificationTest(kubernetes.Unshare)
->>>>>>> refactor to expose ProbeState for reuse
 }
 
 func (p *probeState) setup() {
