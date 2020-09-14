@@ -8,7 +8,7 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
-	"gitlab.com/citihub/probr/internal/output"
+	"github.com/citihub/probr/internal/output"
 )
 
 //TestStatus ..

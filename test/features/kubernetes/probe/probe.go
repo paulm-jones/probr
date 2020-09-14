@@ -1,8 +1,8 @@
 package probe
 
 import (
-	"gitlab.com/citihub/probr/internal/clouddriver/kubernetes"
-	"gitlab.com/citihub/probr/test/features"
+	"github.com/citihub/probr/internal/clouddriver/kubernetes"
+	"github.com/citihub/probr/test/features"
 	apiv1 "k8s.io/api/core/v1"
 )
 
