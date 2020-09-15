@@ -48,7 +48,7 @@ func (p *probeState) aKubernetesClusterExistsWhichWeCanDeployInto() error {
 	b := psp.ClusterIsDeployed()
 
 	if b == nil || !*b {
-		return features.LogAndReturnError("kubernetes cluster is NOT deployed")
+		log.Fatalf("[ERROR] Kubernetes cluster is not deployed")
 	}
 
 	//else we're good ...
