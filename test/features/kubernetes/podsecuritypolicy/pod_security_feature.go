@@ -3,6 +3,8 @@ package podsecuritypolicy
 //go:generate go-bindata.exe -pkg $GOPACKAGE -o assets/assets.go assets/yaml
 
 import (
+	"log"
+
 	"github.com/citihub/probr/internal/clouddriver/kubernetes"
 	"github.com/citihub/probr/internal/coreengine"
 	"github.com/citihub/probr/test/features"
