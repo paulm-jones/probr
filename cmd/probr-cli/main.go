@@ -25,6 +25,7 @@ var kube = kubernetes.GetKubeInstance()
 
 func main() {
 	var v, ot, t, i, o string
+
 	flag.StringVar(&v, "varsFile", "", "path to config file")
 	flag.StringVar(&ot, "outputType", "INMEM", "output defaults to write in memory, if 'IO' will write to specified output directory")
 	flag.StringVar(&t, "tags", "", "test tags, e.g. -tags=\"@CIS-1.2.3, @CIS-4.5.6\".")
