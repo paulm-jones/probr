@@ -1,9 +1,10 @@
 package kubernetesunit
 
 import (
-	"github.com/stretchr/testify/mock"
 	"github.com/citihub/probr/internal/clouddriver/kubernetes"
+	"github.com/stretchr/testify/mock"
 	apiv1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	k8s "k8s.io/client-go/kubernetes"
 )
 
@@ -78,4 +79,12 @@ func (m *kubeMock) DeleteConfigMap(n *string, ns *string) error {
 func (m *kubeMock) GetConstraintTemplates(prefix *string) (*map[string]interface{}, error) {
 	a := m.Called()
 	return a.Get(0).(*map[string]interface{}), a.Error(1)
+}
+func (m *kubeMock) GetClusterRolesByResource(r string) (*[]rbacv1.ClusterRole, error) {
+	a := m.Called()
+	return a.Get(0).(*[]rbacv1.ClusterRole), a.Error(1)
+}
+func (m *kubeMock) GetClusterRoles() (*rbacv1.ClusterRoleList, error) {
+	a := m.Called()
+	return a.Get(0).(*rbacv1.ClusterRoleList), a.Error(1)
 }
