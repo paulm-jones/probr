@@ -11,9 +11,9 @@ import (
 
 	"github.com/citihub/probr"
 	"github.com/citihub/probr/cmd/cli_flags"
-	"github.com/citihub/probr/internal/clouddriver/kubernetes"
 	"github.com/citihub/probr/internal/config"
 	"github.com/citihub/probr/internal/summary"
+	"github.com/citihub/probr/service_packs/kubernetes"
 )
 
 var (

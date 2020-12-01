@@ -15,7 +15,6 @@ type SummaryState struct {
 	ProbesPassed  int
 	ProbesFailed  int
 	ProbesSkipped int
-	ProbeTags     []config.Probe // config.Probe contains user-specified tagging options
 	Probes        map[string]*Probe
 }
 
@@ -27,10 +26,10 @@ func init() {
 	State.Meta["names of pods created"] = []string{}
 }
 
-// PrintSummary will print the current Probes object state, formatted to JSON, if SummaryEnabled is not "false"
+// PrintSummary will print the current Probes object state, formatted to JSON, if NoSummary is not "true"
 func (s *SummaryState) PrintSummary() {
-	if config.Vars.SummaryEnabled == "false" {
-		log.Printf("[NOTICE] Summary Log suppressed by configuration SummaryEnabled=false.")
+	if config.Vars.NoSummary == true {
+		log.Printf("[NOTICE] Summary Log suppressed by configuration NoSummary=true.")
 	} else {
 		summary, _ := json.MarshalIndent(s, "", "  ")
 		fmt.Printf("%s", summary) // Summary output should not be handled by log levels
@@ -44,8 +43,8 @@ func (s *SummaryState) SetProbrStatus() {
 	} else {
 		s.Status = fmt.Sprintf("Complete - %v of %v Probes Failed", s.ProbesFailed, (len(s.Probes) - s.ProbesSkipped))
 	}
-	if config.Vars.Probes != nil {
-		s.Meta["probe_tags_from_config"] = config.Vars.Probes
+	if config.Vars.ProbeExclusions != nil {
+		s.Meta["probe_tags_from_config"] = config.Vars.ProbeExclusions
 	}
 }
 

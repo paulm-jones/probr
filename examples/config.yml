@@ -1,0 +1,43 @@
+# Empty and omitted keys will use default values
+AuditEnabled: true
+AuditDir: audit_output
+CucumberDir: cucumber_output
+OverwriteHistoricalAudits: true
+AuthorisedContainerRegistry: citihubprod.azurecr.io
+UnauthorisedContainerRegistry: docker.io
+ServicePacks:
+  Kubernetes:
+    KubeConfig: 
+    KubeContext:
+CloudProviders:
+  Azure:
+    SubscriptionID: 1234
+    ClientID:
+    ClientSecret:
+    TenantID:
+    LocationDefault:
+    Identity:
+      DefaultNamespaceAI:
+      DefaultNamespaceAIB:
+ProbeExclusions: # allows specific probes to be disabled by name
+  - Name: container_registry_access
+    Excluded: false
+    Justification: "demo"
+
+  - Name: general
+    Excluded: false
+    Justification: "demo"
+
+  - Name: iam
+    Excluded: false
+    Justification: "demo"
+
+  - Name: internet_access
+    Excluded: false
+    Justification: "demo"
+
+  - Name: pod_security_policy
+    Excluded: true
+    Justification: "demo"
+TagExclusions: # allows specific controls/scenarios to be disabled via tags
+  - CIS-6.1.4
