@@ -162,7 +162,7 @@ func LogConfigState() {
 	log.Printf("[NOTICE] Config State: %s", s)
 }
 
-func AuditDir() (string) {
+func AuditDir() string {
 	_ = os.Mkdir(Vars.AuditDir, 0755)
 	return Vars.AuditDir
 }
