@@ -24,7 +24,7 @@ func (k *Kube) GetClient() (*k8s.Clientset, error) {
 		return k.kubeClient, nil
 	}
 
-	clientConfig, err := getClientConfig()
+	clientConfig, err := GetClientConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -37,8 +37,8 @@ func (k *Kube) GetClient() (*k8s.Clientset, error) {
 	return k.kubeClient, nil
 }
 
-// getClientConfig retrieves config and changes context if needed prior to returning
-func getClientConfig() (*restclient.Config, error) {
+// GetClientConfig retrieves config and changes context if needed prior to returning
+func GetClientConfig() (*restclient.Config, error) {
 	// Adapted from clientcmd.BuildConfigFromFlags:
 	// https://github.com/kubernetes/client-go/blob/5ab99756f65dbf324e5adf9bd020a20a024bad85/tools/clientcmd/client_config.go#L606
 

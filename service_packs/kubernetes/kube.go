@@ -585,7 +585,7 @@ func (k *Kube) getAPIResourcesByGrp(grp string, nPrefix string) (*map[string]int
 }
 
 // GetRawResourcesByGrp makes a 'raw' REST call to k8s to get the resources specified by the
-// supplied group string, e.g. "apis/aadpodidentity.k8s.io/v1/azureidentitybindings".  This
+// supplied group string, e.g. "apis/azurepodidentity.k8s.io/v1/azureidentitybindings".  This
 // is required to support resources that are not supported by typed API calls (e.g. "pods").
 func (k *Kube) GetRawResourcesByGrp(g string) (*K8SJSON, error) {
 	c, err := k.GetClient()
