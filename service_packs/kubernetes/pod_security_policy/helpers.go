@@ -100,7 +100,7 @@ type PodSecurityPolicy interface {
 	HostPortsAreRestricted() (*bool, error)
 	VolumeTypesAreRestricted() (*bool, error)
 	SeccompProfilesAreRestricted() (*bool, error)
-	CreatePODSettingSecurityContext(pr *bool, pe *bool, runAsUser *int64, probe *summary.Probe) (*apiv1.Pod, error)
+	CreatePodSettingSecurityContext(pr *bool, pe *bool, runAsUser *int64, probe *summary.Probe) (*apiv1.Pod, error)
 	CreatePODSettingAttributes(hostPID *bool, hostIPC *bool, hostNetwork *bool, probe *summary.Probe) (*apiv1.Pod, error)
 	CreatePODSettingCapabilities(c *[]string, probe *summary.Probe) (*apiv1.Pod, error)
 	CreatePodFromYaml(y []byte, probe *summary.Probe) (*apiv1.Pod, error)
@@ -462,11 +462,11 @@ func logAndReturn(t string, s bool, r bool, e error) (*bool, error) {
 	return &r, e
 }
 
-// CreatePODSettingSecurityContext creates POD with a SecurityContext conforming to the parameters:
+// CreatePodSettingSecurityContext creates POD with a SecurityContext conforming to the parameters:
 // pr *bool - set the Privileged flag.  Defaults to false.
 // pe *bool - set the Allow Privileged Escalation flag.  Defaults to false.
 // runAsUser *int64 - set RunAsUser.  Defaults to 1000.
-func (psp *PSP) CreatePODSettingSecurityContext(pr *bool, pe *bool, runAsUser *int64, probe *summary.Probe) (*apiv1.Pod, error) {
+func (psp *PSP) CreatePodSettingSecurityContext(pr *bool, pe *bool, runAsUser *int64, probe *summary.Probe) (*apiv1.Pod, error) {
 	//default sensibly if not provided
 	//this needs to take account of rules around allowedPrivilegedEscalation and Privileged:
 	// cannot set `allowPrivilegeEscalation` to false and `privileged` to true
@@ -577,7 +577,7 @@ func (psp *PSP) ExecPSPProbeCmd(pName *string, cmd PSPProbeCommand, probe *summa
 	if pName == nil {
 		//want one without privileged access or escalation
 		f := false
-		p, err := psp.CreatePODSettingSecurityContext(&f, &f, nil, probe)
+		p, err := psp.CreatePodSettingSecurityContext(&f, &f, nil, probe)
 
 		if err != nil {
 			return nil, err

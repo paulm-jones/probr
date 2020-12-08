@@ -53,7 +53,7 @@ func (s *scenarioState) iShouldOnlyFindWildcardsInKnownAndAuthorisedConfiguratio
 	//we strip out system/known entries in the cluster roles & roles call
 	var err error
 	var wildcardCount int
-	//	wildcardCount := len(s.wildcardRoles.([]interface{}))
+
 	switch s.wildcardRoles.(type) {
 	case *[]v1.Role:
 		wildCardRoles := s.wildcardRoles.(*[]rbacv1.Role)
@@ -75,7 +75,7 @@ func (s *scenarioState) iShouldOnlyFindWildcardsInKnownAndAuthorisedConfiguratio
 }
 
 //@CIS-5.6.3
-func (s *scenarioState) iAttemptToCreateADeploymentWhichDoesNotHaveASecurityContext() error {
+func (s *scenarioState) iAttemptToCreateAPodWhichDoesNotHaveASecurityContext() error {
 	cname := "probr-general"
 	podName := kubernetes.GenerateUniquePodName(cname)
 	image := config.Vars.AuthorisedContainerRegistry + "/" + config.Vars.ProbeImage
@@ -83,6 +83,7 @@ func (s *scenarioState) iAttemptToCreateADeploymentWhichDoesNotHaveASecurityCont
 	//create pod with nil security context
 	pod, podAudit, err := kubernetes.GetKubeInstance().CreatePod(podName, "probr-general-test-ns", cname, image, true, nil, s.probe)
 
+	//TODO do we need to use UndefinedPodCreationErrorReason if we know the error reason (from `err`)?
 	err = kubernetes.ProcessPodCreationResult(&s.podState, pod, kubernetes.UndefinedPodCreationErrorReason, err)
 
 	description := "Attempts to create a deployment without a security context. Retains the status of the deployment in scenario state for following steps. Passes if created, or if an expected error is encountered."
@@ -102,18 +103,6 @@ func (s *scenarioState) theDeploymentIsRejected() error {
 	s.audit.AuditScenarioStep(description, nil, err)
 
 	return err
-}
-
-//@CIS-6.10.1
-// PENDING IMPLEMENTATION
-func (s *scenarioState) iShouldNotBeAbleToAccessTheKubernetesWebUI() error {
-	//TODO: will be difficult to test this.  To access it, a proxy needs to be created:
-	//az aks browse --resource-group rg-probr-all-policies --name ProbrAllPolicies
-	//which will then open a browser at:
-	//http://127.0.0.1:8001/api/v1/namespaces/kube-system/services/https:kubernetes-dashboard:/proxy/#/login
-	//I don't think this is going to be easy to do from here
-	//Is there another test?  Or is it sufficient to verify that no kube-dashboard is running?
-	return nil
 }
 
 func (s *scenarioState) theKubernetesWebUIIsDisabled() error {
@@ -170,10 +159,9 @@ func (p ProbeStruct) ScenarioInitialize(ctx *godog.ScenarioContext) {
 	ctx.Step(`^I should only find wildcards in known and authorised configurations$`, ps.iShouldOnlyFindWildcardsInKnownAndAuthorisedConfigurations)
 
 	//@CIS-5.6.3
-	ctx.Step(`^I attempt to create a deployment which does not have a Security Context$`, ps.iAttemptToCreateADeploymentWhichDoesNotHaveASecurityContext)
+	ctx.Step(`^I attempt to create a Pod which does not have a Security Context$`, ps.iAttemptToCreateAPodWhichDoesNotHaveASecurityContext)
 	ctx.Step(`^the deployment is rejected$`, ps.theDeploymentIsRejected)
 
-	ctx.Step(`^I should not be able to access the Kubernetes Web UI$`, ps.iShouldNotBeAbleToAccessTheKubernetesWebUI)
 	ctx.Step(`^the Kubernetes Web UI is disabled$`, ps.theKubernetesWebUIIsDisabled)
 
 	ctx.AfterScenario(func(s *godog.Scenario, err error) {

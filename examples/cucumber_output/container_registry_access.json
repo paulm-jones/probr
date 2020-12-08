@@ -34,7 +34,7 @@
             {
                 "id": "protect-image-container-registries;ensure-container-image-registries-are-read-only",
                 "keyword": "Scenario",
-                "name": "Ensure container image registries are read-only",
+                "name": "Ensure the cluster service account has read only access to the container registry",
                 "description": "",
                 "line": 14,
                 "type": "scenario",

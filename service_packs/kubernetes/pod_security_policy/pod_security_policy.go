@@ -6,8 +6,8 @@ import (
 	"log"
 	"strings"
 
-	"path/filepath"
 	"github.com/cucumber/godog"
+	"path/filepath"
 
 	"github.com/citihub/probr/internal/coreengine"
 	"github.com/citihub/probr/internal/utils"
@@ -37,16 +37,6 @@ func (s *scenarioState) aKubernetesClusterIsDeployed() error {
 	description, payload := kubernetes.ClusterIsDeployed()
 	s.audit.AuditScenarioStep(description, payload, nil)
 	return nil // ClusterIsDeployed will create a fatal error if kubeconfig doesn't validate
-}
-
-// PENDING IMPLEMENTATION
-func (s *scenarioState) aKubernetesDeploymentIsAppliedToAnExistingKubernetesCluster() error {
-
-	//TODO: not sure this step is adding value ... return "pass" for now ...
-	description := "Pending Implementation"
-	var payload interface{}
-	s.audit.AuditScenarioStep(description, payload, nil)
-	return nil
 }
 
 func (s *scenarioState) theOperationWillWithAnError(res, msg string) error {
@@ -140,6 +130,7 @@ func (s *scenarioState) runVerificationProbe(c VerificationProbe) error {
 // CIS-5.2.1
 // privileged access
 func (s *scenarioState) privilegedAccessRequestIsMarkedForTheKubernetesDeployment(privilegedAccessRequested string) error {
+
 	var pa bool
 	if privilegedAccessRequested == "True" {
 		pa = true
@@ -147,7 +138,7 @@ func (s *scenarioState) privilegedAccessRequestIsMarkedForTheKubernetesDeploymen
 		pa = false
 	}
 
-	pd, err := psp.CreatePODSettingSecurityContext(&pa, nil, nil, s.probe)
+	pd, err := psp.CreatePodSettingSecurityContext(&pa, nil, nil, s.probe)
 
 	err = kubernetes.ProcessPodCreationResult(&s.podState, pd, kubernetes.PSPNoPrivilege, err)
 
@@ -352,7 +343,7 @@ func (s *scenarioState) theUserRequestedIsForTheKubernetesDeployment(requestedUs
 		runAsUser = 1000
 	}
 
-	pd, err := psp.CreatePODSettingSecurityContext(nil, nil, &runAsUser, s.probe)
+	pd, err := psp.CreatePodSettingSecurityContext(nil, nil, &runAsUser, s.probe)
 	err = kubernetes.ProcessPodCreationResult(&s.podState, pd, kubernetes.PSPAllowedUsersGroups, err)
 
 	description := ""
@@ -666,8 +657,6 @@ func (p ProbeStruct) ScenarioInitialize(ctx *godog.ScenarioContext) {
 	})
 
 	ctx.Step(`^a Kubernetes cluster exists which we can deploy into$`, ps.aKubernetesClusterIsDeployed)
-
-	ctx.Step(`^a Kubernetes deployment is applied to an existing Kubernetes cluster$`, ps.aKubernetesDeploymentIsAppliedToAnExistingKubernetesCluster)
 
 	//CIS-5.2.1
 	ctx.Step(`^privileged access request is marked "([^"]*)" for the Kubernetes deployment$`, ps.privilegedAccessRequestIsMarkedForTheKubernetesDeployment)

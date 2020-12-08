@@ -7,7 +7,7 @@
   "Result": "Failed",
   "Scenarios": {
     "1": {
-      "Name": "Ensure container image registries are read-only",
+      "Name": "Ensure the cluster service account has read only access to the container registry",
       "Result": "Passed",
       "Tags": [
         "@service/kubernetes",

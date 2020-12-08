@@ -209,7 +209,7 @@ func TestCreatePODSettingSecurityContext(t *testing.T) {
 		Return(k.GetPodObject("n", "ns", "c", "i", &sc), nil).Once()
 
 	//privileged and privileged access true, runasuser 2000
-	p, err := psp.CreatePODSettingSecurityContext(utils.BoolPtr(true), utils.BoolPtr(true), utils.Int64Ptr(2000), nil)
+	p, err := psp.CreatePodSettingSecurityContext(utils.BoolPtr(true), utils.BoolPtr(true), utils.Int64Ptr(2000), nil)
 
 	//don't expect an error
 	assert.Nil(t, err)
@@ -233,7 +233,7 @@ func TestCreatePODSettingSecurityContext(t *testing.T) {
 	mk.On("CreatePod", mock.Anything, mock.Anything, mock.Anything, mock.Anything, true, &sc, mock.Anything, mock.Anything).
 		Return(k.GetPodObject("n", "ns", "c", "i", &sc), nil).Once()
 
-	p, err = psp.CreatePODSettingSecurityContext(utils.BoolPtr(false), utils.BoolPtr(true), nil, nil)
+	p, err = psp.CreatePodSettingSecurityContext(utils.BoolPtr(false), utils.BoolPtr(true), nil, nil)
 
 	//don't expect an error
 	assert.Nil(t, err)

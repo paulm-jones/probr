@@ -193,7 +193,7 @@
                     },
                     {
                         "keyword": "When ",
-                        "name": "I attempt to create a deployment which does not have a Security Context",
+                        "name": "I attempt to create a Pod which does not have a Security Context",
                         "line": 26,
                         "match": {
                             "location": "general_feature.go:53"

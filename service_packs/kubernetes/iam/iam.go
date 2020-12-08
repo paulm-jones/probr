@@ -8,6 +8,9 @@ package iam
 //go:generate go-bindata.exe -pkg $GOPACKAGE -o assets/iam/assets.go assets/iam/yaml probe_specifications/iamcontrol
 
 import (
+	"github.com/citihub/probr/internal/clouddriver/kubernetes_crds/azurepodidentity"
+	v1 "github.com/citihub/probr/internal/clouddriver/kubernetes_crds/azurepodidentity/clientset/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"log"
 	"strings"
 
@@ -60,7 +63,11 @@ func (s *scenarioState) aKubernetesClusterIsDeployed() error {
 
 //AZ-AAD-AI-1.0
 func (s *scenarioState) theDefaultNamespaceHasAnAzureIdentityBinding() error {
-	err := s.azureIdentitySetupCheck(iam.AzureIdentityBindingExists, true, "AzureIdentityBinding")
+
+	config, err := kubernetes.GetClientConfig()
+
+	client, _ := v1.NewForConfig(config)
+	client.AzureIdentityBindings("some_namespace")
 
 	description := "Gets the AzureIdentityBindings, then filters according to namespace (default, if none supplied). Passes if binding is retrieved for namespace."
 	s.audit.AuditScenarioStep(description, nil, err)
@@ -172,8 +179,25 @@ func (s *scenarioState) theDefaultNamespaceHasAnAzureIdentity() error {
 
 }
 
-func (s *scenarioState) iCreateAnAzureIdentityBindingCalledInANondefaultNamespace(arg1 string) error {
-	err := s.azureIdentitySetupCheck(iam.AzureIdentityBindingExists, false, "AzureIdentityBinding")
+func (s *scenarioState) iCreateAnAzureIdentityBindingCalledInANondefaultNamespace(bindingName string) error {
+	clientSet, err := v1.NewForConfig(config)
+	if err != nil {
+		return err
+	}
+
+	namespaceName := "mock"
+	_, err = clientSet.AzureIdentityBindings(namespaceName).Create(&azurepodidentity.AzureIdentityBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      bindingName,
+			Namespace: namespaceName,
+		},
+		Spec: azurepodidentity.AzureIdentityBindingSpec{
+			AzureIdentity: "",
+		},
+	})
+	if err != nil {
+		return err
+	}
 
 	description := ""
 	var payload interface{}
@@ -309,7 +333,7 @@ func (p ProbeStruct) ScenarioInitialize(ctx *godog.ScenarioContext) {
 	})
 
 	//general/all
-	ctx.Step(`^a Kubernetes cluster exists which we can deploy into$`, ps.aKubernetesClusterIsDeployed)
+	ctx.Step(`^a Kubernetes cluster is deployed$`, ps.aKubernetesClusterIsDeployed)
 
 	//AZ-AAD-AI-1.0
 	ctx.Step(`^the default namespace has an AzureIdentityBinding$`, ps.theDefaultNamespaceHasAnAzureIdentityBinding)
