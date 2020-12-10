@@ -42,7 +42,7 @@ const (
 type NetworkAccess interface {
 	ClusterIsDeployed() *bool
 	SetupNetworkAccessProbePod(probe *summary.Probe) (*apiv1.Pod, *kubernetes.PodAudit, error)
-	TeardownNetworkAccessProbePod(p *string, e string) error
+	TeardownNetworkAccessProbePod(p string, e string) error
 	AccessURL(pn *string, url *string) (int, error)
 }
 
@@ -82,7 +82,7 @@ func (n *NA) setup() {
 	n.probePodName = defaultNAProbePodName
 
 	// Extract registry and image info from config
-	n.probeImage = config.Vars.AuthorisedContainerRegistry + "/" + config.Vars.ProbeImage
+	n.probeImage = config.Vars.ServicePacks.Kubernetes.AuthorisedContainerRegistry + "/" + config.Vars.ServicePacks.Kubernetes.ProbeImage
 }
 
 // ClusterIsDeployed verifies if a suitable cluster is deployed.
@@ -98,11 +98,10 @@ func (n *NA) SetupNetworkAccessProbePod(probe *summary.Probe) (*apiv1.Pod, *kube
 }
 
 // TeardownNetworkAccessProbePod deletes the test pod with the given name.
-func (n *NA) TeardownNetworkAccessProbePod(p *string, e string) error {
+func (n *NA) TeardownNetworkAccessProbePod(p string, e string) error {
 	_, exists := os.LookupEnv("DONT_DELETE")
 	if !exists {
-		ns := n.probeNamespace
-		err := n.k.DeletePod(p, &ns, false, e) //don't worry about waiting
+		err := n.k.DeletePod(p, n.probeNamespace, e) //don't worry about waiting
 		return err
 	}
 
@@ -114,8 +113,7 @@ func (n *NA) AccessURL(pn *string, url *string) (int, error) {
 
 	//create a curl command to access the supplied url
 	cmd := "curl -s -o /dev/null -I -L -w %{http_code} " + *url
-	ns := n.probeNamespace
-	res := n.k.ExecCommand(&cmd, &ns, pn)
+	res := n.k.ExecCommand(&cmd, &n.probeNamespace, pn)
 	httpCode := res.Stdout
 
 	log.Printf("[INFO] URL: %v HTTP Code: %v Exit Code: %v (error: %v)", *url, httpCode, res.Code, res.Err)

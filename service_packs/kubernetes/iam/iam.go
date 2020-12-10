@@ -179,29 +179,10 @@ func (s *scenarioState) theDefaultNamespaceHasAnAzureIdentity() error {
 
 }
 
-func (s *scenarioState) iCreateAnAzureIdentityBindingCalledInANondefaultNamespace(bindingName string) error {
-	clientSet, err := v1.NewForConfig(config)
-	if err != nil {
-		return err
-	}
+func (s *scenarioState) iCreateAnAzureIdentityBindingCalledInANondefaultNamespace(arg1 string) error {
 
-	namespaceName := "mock"
-	_, err = clientSet.AzureIdentityBindings(namespaceName).Create(&azurepodidentity.AzureIdentityBinding{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      bindingName,
-			Namespace: namespaceName,
-		},
-		Spec: azurepodidentity.AzureIdentityBindingSpec{
-			AzureIdentity: "",
-		},
-	})
-	if err != nil {
-		return err
-	}
-
-	description := ""
-	var payload interface{}
-	s.audit.AuditScenarioStep(description, payload, err)
+	err := iam.CreateAIB()
+	log.Printf("[DEBUG] error returned from CreateAIB: %v", err)
 
 	return err
 }
