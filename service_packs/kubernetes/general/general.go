@@ -78,7 +78,7 @@ func (s *scenarioState) iShouldOnlyFindWildcardsInKnownAndAuthorisedConfiguratio
 func (s *scenarioState) iAttemptToCreateADeploymentWhichDoesNotHaveASecurityContext() error {
 	cname := "probr-general"
 	podName := kubernetes.GenerateUniquePodName(cname)
-	image := config.Vars.AuthorisedContainerRegistry + "/" + config.Vars.ProbeImage
+	image := config.Vars.ServicePacks.Kubernetes.AuthorisedContainerRegistry + "/" + config.Vars.ServicePacks.Kubernetes.ProbeImage
 
 	//create pod with nil security context
 	pod, podAudit, err := kubernetes.GetKubeInstance().CreatePod(podName, "probr-general-test-ns", cname, image, true, nil, s.probe)
@@ -177,7 +177,7 @@ func (p ProbeStruct) ScenarioInitialize(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the Kubernetes Web UI is disabled$`, ps.theKubernetesWebUIIsDisabled)
 
 	ctx.AfterScenario(func(s *godog.Scenario, err error) {
-		kubernetes.GetKubeInstance().DeletePod(&ps.podState.PodName, utils.StringPtr("probr-general-test-ns"), false, p.Name())
+		kubernetes.GetKubeInstance().DeletePod(ps.podState.PodName, "probr-general-test-ns", p.Name())
 		coreengine.LogScenarioEnd(s)
 	})
 }

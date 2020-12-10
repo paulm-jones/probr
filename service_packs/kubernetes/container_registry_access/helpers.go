@@ -21,7 +21,7 @@ const (
 type ContainerRegistryAccess interface {
 	ClusterIsDeployed() *bool
 	SetupContainerAccessProbePod(r string, probe *summary.Probe) (*apiv1.Pod, *kubernetes.PodAudit, error)
-	TeardownContainerAccessProbePod(p *string, e string) error
+	TeardownContainerAccessProbePod(p string, e string) error
 }
 
 // CRA implements the ContainerRegistryAccess interface.
@@ -64,7 +64,7 @@ func (c *CRA) ClusterIsDeployed() *bool {
 //SetupContainerAccessProbePod creates a pod with characteristics required for testing container access.
 func (c *CRA) SetupContainerAccessProbePod(r string, probe *summary.Probe) (*apiv1.Pod, *kubernetes.PodAudit, error) {
 	//full image is the repository + the configured image
-	i := r + "/" + config.Vars.ProbeImage
+	i := r + "/" + config.Vars.ServicePacks.Kubernetes.ProbeImage
 	pname := kubernetes.GenerateUniquePodName(caPodNameBase + "-" + strings.ReplaceAll(r, ".", "-"))
 	ns, cname := caNamespace, caContainer
 	// let caller handle result ...
@@ -72,9 +72,8 @@ func (c *CRA) SetupContainerAccessProbePod(r string, probe *summary.Probe) (*api
 }
 
 //TeardownContainerAccessProbePod deletes the supplied test pod in the container registry access namespace.
-func (c *CRA) TeardownContainerAccessProbePod(p *string, e string) error {
-	ns := caNamespace
-	err := c.k.DeletePod(p, &ns, false, e) //don't worry about waiting
+func (c *CRA) TeardownContainerAccessProbePod(p string, e string) error {
+	err := c.k.DeletePod(p, caNamespace, e) //don't worry about waiting
 	return err
 }
 
