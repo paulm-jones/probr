@@ -10,10 +10,11 @@ Feature: Ensure stringent authentication and authorisation
 
   Background:
     Given a Kubernetes cluster is deployed
-    # TODO PJITREVIEW how do we know if this is running?
     And the cluster has managed identity components deployed
 
-  @probes/kubernetes/iam/AZ-AAD-AI-1.0 @control_type/preventative @csp/azure
+
+  @probes/kubernetes/iam/AZ-AAD-AI-1.0
+    @control_type/preventative @csp/azure
   Scenario Outline: Prevent cross namespace Azure Identities
     # TODO PJITREVIEW remove implementation detail from here
     And an AzureIdentityBinding called "probr-aib" exists in the namespace called "default"
@@ -26,7 +27,9 @@ Feature: Ensure stringent authentication and authorisation
       | the probr   | Fail    |
       | the default | Succeed |
 
-  @probes/kubernetes/iam/AZ-AAD-AI-1.1 @control_type/preventative @csp/azure
+
+  @probes/kubernetes/iam/AZ-AAD-AI-1.1
+  @control_type/preventative @csp/azure
   Scenario: Prevent cross namespace Azure Identity Bindings
     # TODO PJITREVIEW remove implementation detail from here
     # TODO PJITREVIEW add additional Given to satisfy the positive case
@@ -37,12 +40,37 @@ Feature: Ensure stringent authentication and authorisation
     Then the pod is deployed successfully
     But an attempt to obtain an access token from that pod should fail
 
-  @probes/kubernetes/iam/AZ-AAD-AI-1.2 @control_type/preventative @csp/azure
+
+  @probes/kubernetes/iam/AZ-AAD-AI-1.2
+  @control_type/preventative
+  @csp/azure
     # TODO PJITREVIEW needs cluster reader or at least reader on the MIC namespace
     # e.g. @permissions/clusterreaderrole
   Scenario: Prevent access to AKS credentials via Azure Identity Components
 
-    #TODO PJITREVIEW add description here to say why this file is important
+  On the agent node VMs in the Kubernetes cluster, service principal credentials are stored in the file
+  /etc/kubernetes/azure.json, which should therefore be protected.
+
+  See https://docs.microsoft.com/en-us/azure/aks/kubernetes-service-principal
 
     When I execute the command "cat /etc/kubernetes/azure.json" against the MIC pod
     Then Kubernetes should prevent me from running the command
+
+
+  @probes/kubernetes/general/1.0
+    @control_type/inspection
+    @standard/cis/gke/5.1.3
+    @standard/citihub/CHC2-IAM105
+  Scenario Outline: Minimise wildcards in Roles and Cluster Roles
+
+  Kubernetes roles provide access to resources. Using wildcards does not adhere to the security principle of least
+  privilege. Other than known system-assigned and well understood role definitions (which are configurable in Probr),
+  we should not expect to use wildcards.
+
+    When I inspect the "<rolelevel>" that are configured
+    Then I should only find wildcards in known and authorised configurations
+
+    Examples:
+      | rolelevel     |
+      | Roles         |
+      | Cluster Roles |

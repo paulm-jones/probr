@@ -139,10 +139,9 @@ func (p ProbeStruct) ScenarioInitialize(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the push request is rejected due to authorization$`, ps.thePushRequestIsRejectedDueToAuthorization)
 
 	//CIS-6.1.4
+	//CIS-6.1.5
 	ctx.Step(`^a user attempts to deploy a container from an authorised registry$`, ps.aUserAttemptsToDeployAuthorisedContainer)
 	ctx.Step(`^the deployment attempt is allowed$`, ps.theDeploymentAttemptIsAllowed)
-
-	//CIS-6.1.5
 	ctx.Step(`^a user attempts to deploy a container from an unauthorised registry$`, ps.aUserAttemptsToDeployUnauthorisedContainer)
 	ctx.Step(`^the deployment attempt is denied$`, ps.theDeploymentAttemptIsDenied)
 

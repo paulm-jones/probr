@@ -539,7 +539,7 @@
                     },
                     {
                         "keyword": "Then ",
-                        "name": "the operation will \"Fail\" with an error \"Containers cant run using hostPID\"",
+                        "name": "the operation will \"Fail\" with an error \"Containers cannot run using hostPID\"",
                         "line": 49,
                         "match": {
                             "location": "pod_security_policy.go:37"
@@ -2074,7 +2074,7 @@
                     },
                     {
                         "keyword": "Then ",
-                        "name": "the operation will \"Fail\" with an error \"Containers cant run as root\"",
+                        "name": "the operation will \"Fail\" with an error \"Containers cannot run as root\"",
                         "line": 113,
                         "match": {
                             "location": "pod_security_policy.go:37"
@@ -2457,7 +2457,7 @@
                     },
                     {
                         "keyword": "Then ",
-                        "name": "the operation will \"Fail\" with an error \"Containers cant run with NET_RAW capabilities\"",
+                        "name": "the operation will \"Fail\" with an error \"Containers cannot run with NET_RAW capabilities\"",
                         "line": 129,
                         "match": {
                             "location": "pod_security_policy.go:37"

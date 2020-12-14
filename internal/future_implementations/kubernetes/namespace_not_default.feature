@@ -7,16 +7,15 @@ Feature: Use network policies to isolate traffic in your cluster network.
 
   Rule: ...
 
-    #TODO PJITREVIEW pull into Service and rename steps to match latest impls
+    #TODO PJITREVIEW pull into Service Pack and rename steps to match latest impls
     @preventative
     Scenario Outline: Resources in the kubernetes cluster should not be uploaded into the default namespace
-      Given an active Kubernetes cluster exists which we can make changes to
-      And some system exists which can detect if resources are uploaded into the default namespace
-      When a resource is uploaded to the kubernetes cluster
-      And the system rules that the upload <NameSpace> uploaded to the default namespace
-      Then upload will <Result> with error <Error Message>
+      Given a Kubernetes cluster is deployed
+      When a pod is deployed in the cluster
+      And the system rules that the upload <SUCCEEDED> uploaded to the default namespace
+      Then the operation will "<RESULT>" with an error "<ERRORMESSAGE>"
 
       Examples:
-        | NameSpace | Result  | Error Message                                           |
+        | SUCCEEDED | RESULT  | ERRORMESSAGE                                            |
         | Was       | Fail    | A resource can't be uploaded with the default namespace |
         | Was Not   | Succeed | No error will show                                      |

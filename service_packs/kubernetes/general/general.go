@@ -11,7 +11,6 @@ import (
 
 	"github.com/cucumber/godog"
 
-	"github.com/citihub/probr/internal/config"
 	"github.com/citihub/probr/internal/coreengine"
 	"github.com/citihub/probr/internal/utils"
 	"github.com/citihub/probr/service_packs/kubernetes"
@@ -71,24 +70,6 @@ func (s *scenarioState) iShouldOnlyFindWildcardsInKnownAndAuthorisedConfiguratio
 	description := "Examines scenario state's wildcard roles. Passes if no wildcard roles are found."
 	s.audit.AuditScenarioStep(description, s, err)
 
-	return err
-}
-
-//@CIS-5.6.3
-func (s *scenarioState) iAttemptToCreateAPodWhichDoesNotHaveASecurityContext() error {
-	cname := "probr-general"
-	podName := kubernetes.GenerateUniquePodName(cname)
-	image := config.Vars.ServicePacks.Kubernetes.AuthorisedContainerRegistry + "/" + config.Vars.ServicePacks.Kubernetes.ProbeImage
-
-	//create pod with nil security context
-	pod, podAudit, err := kubernetes.GetKubeInstance().CreatePod(podName, "probr-general-test-ns", cname, image, true, nil, s.probe)
-
-	//TODO do we need to use UndefinedPodCreationErrorReason if we know the error reason (from `err`)?
-	err = kubernetes.ProcessPodCreationResult(&s.podState, pod, kubernetes.UndefinedPodCreationErrorReason, err)
-
-	description := "Attempts to create a deployment without a security context. Retains the status of the deployment in scenario state for following steps. Passes if created, or if an expected error is encountered."
-	payload := kubernetes.PodPayload{Pod: pod, PodAudit: podAudit}
-	s.audit.AuditScenarioStep(description, payload, err)
 	return err
 }
 
@@ -158,10 +139,7 @@ func (p ProbeStruct) ScenarioInitialize(ctx *godog.ScenarioContext) {
 	ctx.Step(`^I inspect the "([^"]*)" that are configured$`, ps.iInspectTheThatAreConfigured)
 	ctx.Step(`^I should only find wildcards in known and authorised configurations$`, ps.iShouldOnlyFindWildcardsInKnownAndAuthorisedConfigurations)
 
-	//@CIS-5.6.3
-	ctx.Step(`^I attempt to create a Pod which does not have a Security Context$`, ps.iAttemptToCreateAPodWhichDoesNotHaveASecurityContext)
-	ctx.Step(`^the deployment is rejected$`, ps.theDeploymentIsRejected)
-
+	//@CIS-6.10.1
 	ctx.Step(`^the Kubernetes Web UI is disabled$`, ps.theKubernetesWebUIIsDisabled)
 
 	ctx.AfterScenario(func(s *godog.Scenario, err error) {
