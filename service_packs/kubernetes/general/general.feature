@@ -4,7 +4,6 @@
 @standard/cis/gke
 @csp/any
 Feature: General Cluster Security Configurations
-
   As a Security Auditor
   I want to ensure that Kubernetes clusters have general security configurations in place
   So that no general cluster vulnerabilities can be exploited
@@ -23,15 +22,17 @@ Feature: General Cluster Security Configurations
     Then I should only find wildcards in known and authorised configurations
 
     Examples:
-      | rolelevel      |
-      | Roles          |
-      | Cluster Roles  |
+      | rolelevel     |
+      | Roles         |
+      | Cluster Roles |
+
 
   @probes/kubernetes/general/1.1 @control_type/inspection @standard/cis/gke/5.6.3
   # TODO Perhaps we need an opinionated view of what good looks like here
   # For example this test arguably shouldn't pass if I provide `securityContext: allowPrivilegeEscalation: true`
   # Arguably could move into PSP Feature
   # #OPA #BestPractice
+  # TODO PJITREVIEW remove for now
   Scenario: Ensure Security Contexts are enforced
 
   A Security Context defines privilege and access control settings for a Pod or Container.
@@ -39,6 +40,7 @@ Feature: General Cluster Security Configurations
 
     When I attempt to create a Pod which does not have a Security Context
     Then the deployment is rejected
+
 
   @probes/kubernetes/general/1.2 @control_type/inspection @standard/cis/gke/6.10.1 @standard/citihub/CHC2-ITS115
   Scenario: Ensure Kubernetes Web UI is disabled

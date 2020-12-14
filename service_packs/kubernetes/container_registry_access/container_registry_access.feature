@@ -13,16 +13,19 @@ Feature: Protect image container registries
     #Rule: CHC2-APPDEV135 - Ensure software release and deployment is managed through a formal, controlled process
 
   Background:
+    # TODO PJITREVIEW should be that we can connect to a cluster
     Given a Kubernetes cluster is deployed
 
   @probes/kubernetes/container_registry_access/1.0 @control_type/preventative @standard/cis/gke/6.1.3
   # TODO not applicable to AKS?
   # TODO unimplemented
+  # TODO PJITREVIEW rename to the "authorised container registry"
   Scenario: Ensure the cluster service account has read only access to the container registry
     When I attempt to push to the container registry using the cluster identity
     Then the push request is rejected due to authorization
 
   @probes/kubernetes/container_registry_access/1.1 @control_type/preventative @standard/cis/gke/6.1.4
+  # TODO PJITREVIEW this can be combined into the Scenario below.
   Scenario: Ensure deployment from an authorised container registry is allowed
     When a user attempts to deploy a container from an authorised registry
     Then the deployment attempt is allowed

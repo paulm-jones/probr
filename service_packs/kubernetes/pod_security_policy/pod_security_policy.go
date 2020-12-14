@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"path/filepath"
+
 	"github.com/cucumber/godog"
-	"path/filepath"
 
 	"github.com/citihub/probr/internal/coreengine"
 	"github.com/citihub/probr/internal/utils"
@@ -131,7 +131,6 @@ func (s *scenarioState) runVerificationProbe(c VerificationProbe) error {
 // CIS-5.2.1
 // privileged access
 func (s *scenarioState) privilegedAccessRequestIsMarkedForTheKubernetesDeployment(privilegedAccessRequested string) error {
-
 	var pa bool
 	if privilegedAccessRequested == "True" {
 		pa = true

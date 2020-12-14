@@ -69,7 +69,6 @@ func (s *scenarioState) aNamedAzureIdentityBindingExistsInNamedNS(aibName string
 	return err
 }
 
-
 func (s *scenarioState) iCreateASimplePodInNamespaceAssignedWithThatAzureIdentityBinding(namespace, aibName string) error {
 	description := ""
 	var payload interface{}

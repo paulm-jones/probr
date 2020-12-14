@@ -10,29 +10,39 @@ Feature: Ensure stringent authentication and authorisation
 
   Background:
     Given a Kubernetes cluster is deployed
+    # TODO PJITREVIEW how do we know if this is running?
+    And the cluster has managed identity components deployed
 
-    @probes/kubernetes/iam/AZ-AAD-AI-1.0 @control_type/preventative @csp/azure
-    Scenario Outline: Prevent cross namespace Azure Identities
-        And an AzureIdentityBinding called "probr-aib" exists in the namespace called "default"
-        When I create a simple pod in "<NAMESPACE>" namespace assigned with the "probr-aib" AzureIdentityBinding
-        Then the pod is deployed successfully
-        But an attempt to obtain an access token from that pod should "<RESULT>"
+  @probes/kubernetes/iam/AZ-AAD-AI-1.0 @control_type/preventative @csp/azure
+  Scenario Outline: Prevent cross namespace Azure Identities
+    # TODO PJITREVIEW remove implementation detail from here
+    And an AzureIdentityBinding called "probr-aib" exists in the namespace called "default"
+    When I create a simple pod in "<NAMESPACE>" namespace assigned with the "probr-aib" AzureIdentityBinding
+    Then the pod is deployed successfully
+    But an attempt to obtain an access token from that pod should "<RESULT>"
 
-        Examples:
-			| NAMESPACE     | RESULT  |
-			| the probr     | Fail    |
-			| the default   | Succeed |
+    Examples:
+      | NAMESPACE   | RESULT  |
+      | the probr   | Fail    |
+      | the default | Succeed |
 
-    @probes/kubernetes/iam/AZ-AAD-AI-1.1 @control_type/preventative @csp/azure
-    Scenario: Prevent cross namespace Azure Identity Bindings
-        And the namespace called "default" has an AzureIdentity called "probr-probe"
-        When I create an AzureIdentityBinding called "probr-aib" in the Probr namespace bound to the "probr-probe" AzureIdentity
-        And I deploy a pod assigned with the "probr-aib" AzureIdentityBinding into the Probr namespace
-        Then the pod is deployed successfully
-        But an attempt to obtain an access token from that pod should fail
+  @probes/kubernetes/iam/AZ-AAD-AI-1.1 @control_type/preventative @csp/azure
+  Scenario: Prevent cross namespace Azure Identity Bindings
+    # TODO PJITREVIEW remove implementation detail from here
+    # TODO PJITREVIEW add additional Given to satisfy the positive case
+    # Use more general terms like "my namespace" "another namespace"
+    And the namespace called "default" has an AzureIdentity called "probr-probe"
+    When I create an AzureIdentityBinding called "probr-aib" in the Probr namespace bound to the "probr-probe" AzureIdentity
+    And I deploy a pod assigned with the "probr-aib" AzureIdentityBinding into the Probr namespace
+    Then the pod is deployed successfully
+    But an attempt to obtain an access token from that pod should fail
 
   @probes/kubernetes/iam/AZ-AAD-AI-1.2 @control_type/preventative @csp/azure
+    # TODO PJITREVIEW needs cluster reader or at least reader on the MIC namespace
+    # e.g. @permissions/clusterreaderrole
   Scenario: Prevent access to AKS credentials via Azure Identity Components
-    And the cluster has managed identity components deployed
+
+    #TODO PJITREVIEW add description here to say why this file is important
+
     When I execute the command "cat /etc/kubernetes/azure.json" against the MIC pod
     Then Kubernetes should prevent me from running the command
