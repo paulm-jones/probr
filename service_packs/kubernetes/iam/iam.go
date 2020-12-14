@@ -8,9 +8,6 @@ package iam
 //go:generate go-bindata.exe -pkg $GOPACKAGE -o assets/iam/assets.go assets/iam/yaml probe_specifications/iamcontrol
 
 import (
-	"github.com/citihub/probr/internal/clouddriver/kubernetes_crds/azurepodidentity"
-	v1 "github.com/citihub/probr/internal/clouddriver/kubernetes_crds/azurepodidentity/clientset/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"log"
 	"strings"
 
@@ -35,18 +32,18 @@ func SetIAM(i IdentityAccessManagement) {
 }
 
 // azureIdentitySetupCheck executes the provided function and returns a formatted error
-func (s *scenarioState) azureIdentitySetupCheck(f func(bool) (bool, error), useDefaultNS bool, k string) error {
+func (s *scenarioState) azureIdentitySetupCheck(f func(arg1 string, arg2 string) (bool, error), namespace, resourceType, resourceName string) error {
 
-	b, err := f(useDefaultNS)
+	b, err := f(namespace, resourceName)
 
 	if err != nil {
-		err = utils.ReformatError("error raised when checking for %v: %v", k, err)
+		err = utils.ReformatError("error raised when checking for %v: %v", resourceType, err)
 		log.Print(err)
 		return err
 	}
 
 	if !b {
-		err = utils.ReformatError("%v does not exist (result: %t)", k, b)
+		err = utils.ReformatError("%v does not exist (result: %t)", resourceType, b)
 		log.Print(err)
 		return err
 	}
@@ -62,21 +59,18 @@ func (s *scenarioState) aKubernetesClusterIsDeployed() error {
 }
 
 //AZ-AAD-AI-1.0
-func (s *scenarioState) theDefaultNamespaceHasAnAzureIdentityBinding() error {
+func (s *scenarioState) aNamedAzureIdentityBindingExistsInNamedNS(aibName string, namespace string) error {
 
-	config, err := kubernetes.GetClientConfig()
+	err := s.azureIdentitySetupCheck(iam.AzureIdentityBindingExists, namespace, "AzureIdentityBinding", aibName)
 
-	client, _ := v1.NewForConfig(config)
-	client.AzureIdentityBindings("some_namespace")
-
-	description := "Gets the AzureIdentityBindings, then filters according to namespace (default, if none supplied). Passes if binding is retrieved for namespace."
+	description := "Gets the AzureIdentityBindings, then filters according to namespace. Passes if binding is retrieved for namespace."
 	s.audit.AuditScenarioStep(description, nil, err)
 
 	return err
-
 }
 
-func (s *scenarioState) iCreateASimplePodInNamespaceAssignedWithThatAzureIdentityBinding(namespace string) error {
+
+func (s *scenarioState) iCreateASimplePodInNamespaceAssignedWithThatAzureIdentityBinding(namespace, aibName string) error {
 	description := ""
 	var payload interface{}
 
@@ -88,7 +82,7 @@ func (s *scenarioState) iCreateASimplePodInNamespaceAssignedWithThatAzureIdentit
 		if namespace == "the default" {
 			s.useDefaultNS = true
 		}
-		pd, err := iam.CreateIAMProbePod(y, s.useDefaultNS, s.probe)
+		pd, err := iam.CreateIAMProbePod(y, s.useDefaultNS, aibName, s.probe)
 		err = kubernetes.ProcessPodCreationResult(&s.podState, pd, kubernetes.UndefinedPodCreationErrorReason, err)
 	}
 
@@ -168,26 +162,31 @@ func (s *scenarioState) anAttemptToObtainAnAccessTokenFromThatPodShould(expected
 }
 
 //AZ-AAD-AI-1.1
-func (s *scenarioState) theDefaultNamespaceHasAnAzureIdentity() error {
-	err := s.azureIdentitySetupCheck(iam.AzureIdentityExists, true, "AzureIdentity")
+func (s *scenarioState) aNamedAzureIdentityExistsInNamedNS(namespace string, aiName string) error {
 
+	err := s.azureIdentitySetupCheck(iam.AzureIdentityExists, namespace, "AzureIdentity", aiName)
+
+	description := "Gets the AzureIdentityBindings, then filters according to namespace. Passes if binding is retrieved for namespace."
+	s.audit.AuditScenarioStep(description, nil, err)
+
+	return err
+}
+
+func (s *scenarioState) iCreateAnAzureIdentityBindingCalledInANondefaultNamespace(aibName, aiName string) error {
 	description := ""
 	var payload interface{}
+
+	err := iam.CreateAIB(false, aibName, aiName) // create an AIB in a non-default NS if it deosn't already exist
+	if err != nil {
+		err = utils.ReformatError("error returned from CreateAIB: %v", err)
+		log.Print(err)
+	}
+
 	s.audit.AuditScenarioStep(description, payload, err)
-
-	return err
-
-}
-
-func (s *scenarioState) iCreateAnAzureIdentityBindingCalledInANondefaultNamespace(arg1 string) error {
-
-	err := iam.CreateAIB()
-	log.Printf("[DEBUG] error returned from CreateAIB: %v", err)
-
 	return err
 }
 
-func (s *scenarioState) iDeployAPodAssignedWithTheAzureIdentityBindingIntoTheSameNamespaceAsTheAzureIdentityBinding(arg1, arg2 string) error {
+func (s *scenarioState) iDeployAPodAssignedWithTheAzureIdentityBindingIntoTheSameNamespaceAsTheAzureIdentityBinding(aibName string) error {
 	description := ""
 	var payload interface{}
 
@@ -196,7 +195,7 @@ func (s *scenarioState) iDeployAPodAssignedWithTheAzureIdentityBindingIntoTheSam
 		err = utils.ReformatError("error reading yaml for test: %v", err)
 		log.Print(err)
 	} else {
-		pd, err := iam.CreateIAMProbePod(y, false, s.probe)
+		pd, err := iam.CreateIAMProbePod(y, false, aibName, s.probe)
 		err = kubernetes.ProcessPodCreationResult(&s.podState, pd, kubernetes.UndefinedPodCreationErrorReason, err)
 	}
 
@@ -317,8 +316,9 @@ func (p ProbeStruct) ScenarioInitialize(ctx *godog.ScenarioContext) {
 	ctx.Step(`^a Kubernetes cluster is deployed$`, ps.aKubernetesClusterIsDeployed)
 
 	//AZ-AAD-AI-1.0
-	ctx.Step(`^the default namespace has an AzureIdentityBinding$`, ps.theDefaultNamespaceHasAnAzureIdentityBinding)
-	ctx.Step(`^I create a simple pod in "([^"]*)" namespace assigned with that AzureIdentityBinding$`, ps.iCreateASimplePodInNamespaceAssignedWithThatAzureIdentityBinding)
+	ctx.Step(`^an AzureIdentityBinding called "([^"]*)" exists in the namespace called "([^"]*)"$`, ps.aNamedAzureIdentityBindingExistsInNamedNS)
+
+	ctx.Step(`^I create a simple pod in "([^"]*)" namespace assigned with the "([^"]*)" AzureIdentityBinding$`, ps.iCreateASimplePodInNamespaceAssignedWithThatAzureIdentityBinding)
 
 	//AZ-AAD-AI-1.0, AZ-AAD-AI-1.1
 	ctx.Step(`^the pod is deployed successfully$`, ps.thePodIsDeployedSuccessfully)
@@ -329,9 +329,9 @@ func (p ProbeStruct) ScenarioInitialize(ctx *godog.ScenarioContext) {
 	ctx.Step(`^an attempt to obtain an access token from that pod should fail$`, ps.anAttemptToObtainAnAccessTokenFromThatPodShouldFail)
 
 	//AZ-AAD-AI-1.1
-	ctx.Step(`^the default namespace has an AzureIdentity$`, ps.theDefaultNamespaceHasAnAzureIdentity)
-	ctx.Step(`^I create an AzureIdentityBinding called "([^"]*)" in a non-default namespace$`, ps.iCreateAnAzureIdentityBindingCalledInANondefaultNamespace)
-	ctx.Step(`^I deploy a pod assigned with the "([^"]*)" AzureIdentityBinding into the same namespace as the "([^"]*)" AzureIdentityBinding$`, ps.iDeployAPodAssignedWithTheAzureIdentityBindingIntoTheSameNamespaceAsTheAzureIdentityBinding)
+	ctx.Step(`^the namespace called "([^"]*)" has an AzureIdentity called "([^"]*)"$`, ps.aNamedAzureIdentityExistsInNamedNS)
+	ctx.Step(`^I create an AzureIdentityBinding called "([^"]*)" in the Probr namespace bound to the "([^"]*)" AzureIdentity$`, ps.iCreateAnAzureIdentityBindingCalledInANondefaultNamespace)
+	ctx.Step(`^I deploy a pod assigned with the "([^"]*)" AzureIdentityBinding into the Probr namespace$`, ps.iDeployAPodAssignedWithTheAzureIdentityBindingIntoTheSameNamespaceAsTheAzureIdentityBinding)
 
 	//AZ-AAD-AI-1.2
 	ctx.Step(`^I execute the command "([^"]*)" against the MIC pod$`, ps.iExecuteTheCommandAgainstTheMICPod)
